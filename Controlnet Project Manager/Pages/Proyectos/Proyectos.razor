@@ -1,0 +1,855 @@
+﻿@page "/EstadoProyectos"
+@using System.ComponentModel
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Reflection
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager NavigationManager
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject MyCustomTheme tema;
+<style>
+    body {
+        background: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Background}" : $"{tema.Theme.Palette.Background}");
+    }
+
+    .mud-paper {
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        /* text-align: center; */ /* Quitar esta línea */
+    }
+
+    /* Estilo específico para los elementos div dentro de MudPaper */
+    .mud-paper div {
+        text-align: left;
+    }
+
+    .mud-typography-subtitle {
+        font-size: var(--mud-typography-subtitle2-size);
+        font-family: var(--mud-typography-subtitle2-family);
+        font-weight: var(--mud-typography-subtitle2-weight);
+        letter-spacing: var(--mud-typography-subtitle2-letterspacing);
+        text-transform: var(--mud-typography-subtitle2-text-transform);
+    }
+
+    .mud-input-label-outlined {
+        transform: translate(14px,20px) scale(1);
+        pointer-events: none;
+        padding: 0 5px !important;
+    }
+
+    .mud-toolbar {
+        --mud-internal-toolbar-height: 15%;
+    }
+
+    .titulo-estado {
+        font-size: 1.0rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center; /* Centra el texto horizontalmente */
+        width: 100%; /* Asegura que el elemento del texto ocupe todo el ancho del contenedor */
+        height: 60px;
+    }
+
+    .mud-paper {
+        /* Tamaño de fuente más pequeño para todo el contenido dentro de MudPaper */
+        font-size: 0.8rem;
+        text-align: left;
+    }
+
+    .floating-button {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+    }
+
+
+    .text-task {
+        font-size: 0.8rem;
+        color: #90A4AE;
+    }
+
+    .text-task-black {
+        font-size: 0.8rem;
+        color: #000;
+    }
+    .text-task-oscuro{
+        font-size: 0.8rem;
+        color: #fff;
+    }
+
+    .titulo-proyecto {
+        font-size: 18px;
+        color: #000;
+    }
+
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+    .no-selection {
+        pointer-events: none;
+    }
+  
+</style>
+
+@if (!Cargando)
+{
+    @if (menuRol != null)
+    {
+        <MudToolBar DisableGutters="true" Style="@styleValue">
+            <div style="width: 15%; flex-direction: row; display: flex; align-items: center; margin-left: 5px">
+                <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                    <ActivatorContent>
+                        <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                            <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                @(TextSelection("Cliente", _selectedClientes))
+                            </div>
+                            <div style="position: absolute; right: 5px; bottom: 8px;">
+                                <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                            </div>
+                        </MudChip>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var cliente in _clientes.Select(it => it.Nombre))
+                        {
+                            var isChecked = _selectedClientes.Contains(cliente);
+                            <MudMenuItem Style="width: 250px; height: 50px;">
+                                <div>
+                                    <MudCheckBox T="bool" @bind-Checked=isChecked Label="@cliente" @onclick="@(() => ToggleSelection(cliente,_selectedClientes))" />
+                                </div>
+                            </MudMenuItem>
+                        }
+                    </ChildContent>
+                </MudMenu>
+            </div>
+
+            <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+                <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                    <ActivatorContent>
+                        <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                            <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                @(TextSelection("Estado", _selectedEstados))
+                            </div>
+                            <div style="position: absolute; right: 5px; bottom: 8px;">
+                                <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                            </div>
+                        </MudChip>
+                    </ActivatorContent>
+                    <ChildContent>
+                        @foreach (var estado in _estados.Select(it => it.Nombre))
+                        {
+                            var isChecked = _selectedEstados.Contains(estado);
+                            <MudMenuItem Style="width: 250px; height: 50px;">
+                                <div>
+                                    <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado" @onclick="@(() => ToggleSelection(estado,_selectedEstados))" />
+                                </div>
+                            </MudMenuItem>
+                        }
+                    </ChildContent>
+
+                    @*
+                    //En el estado del filtro no se ven los estados que estan vacios
+                    <ChildContent>
+                        @foreach (var estado in _estados.Where(it => FiltrarProyecto().Any(p => p.Status == it.Nombre)))
+                        {
+                            var isChecked = _selectedEstados.Contains(estado.Nombre);
+
+                            <MudMenuItem Style="width: 250px; height: 50px;">
+                                <div>
+                                    <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado.Nombre" @onclick="@(() => ToggleSelection(estado.Nombre,_selectedEstados))" />
+                                </div>
+                            </MudMenuItem>
+                        }
+                    </ChildContent>
+                    *@
+
+                </MudMenu>
+            </div>
+        </MudToolBar>
+
+        <br/>
+        <br/>
+
+        @if (render)
+        {
+            <MudDropContainer T="KanbanTaskItem" @ref="_dropContainer" Items="@FiltrarProyecto()" ItemsSelector="@((item, column) => item.Status == column)" ItemDropped="TaskUpdated" Class="d-flex flex-row" Style="width:100%" CanDrop="@CanDrop">
+
+                <ChildContent>
+                    <div style="display: flex; justify-content: space-around;">
+                        @foreach (var item in FiltrarEstado())
+                        {
+                            string customClass = "my-2 mx-2 ";
+                            string customKanTaskClass = "mud-height-full ";
+
+                            var proyectosEnEstado = FiltrarProyecto().Count(p => p.Status == item.Name);
+                            ColorStatus colorStatus = _color.FirstOrDefault(c => c.Name == item.Name);
+                            string customBorderClass = "border-top: 5px solid " + colorStatus.ColorHeader;
+
+                            <MudPaper Elevation="3" Width="300px" MinHeight="100px" Class="@customClass">
+                                <MudText Typo="Typo.subtitle2" Class="titulo-estado" Style="@(Layout.esModoNocturno()? "color:white" : "")">@item.Name: @proyectosEnEstado</MudText>
+                                <hr style="border-top: 1px solid @colorStatus.ColorHeader; width: 100%;">
+                                <MudDropZone T="KanbanTaskItem" Identifier="@item.Name" Class="@customKanTaskClass" Style="margin: 5px;"></MudDropZone>
+                            </MudPaper>
+                        }
+                    </div>
+                </ChildContent>
+
+                <ItemRenderer>
+                    @if (context != null)
+                    {
+                        string customBorder = "pa-4 lg my-3 " + context.Status;
+
+                        ColorStatus colorStatus = _color.FirstOrDefault(c => c.Name == context.Status);
+                        string customBorderClass = "border-left: 5px solid " + colorStatus.ColorHeader;
+
+                        <MudPaper Class="pa-4 lg my-3" Style="@customBorderClass" @ondblclick="@(() => HandleClick(context.Id))">
+                            <div class="d-flex align-items-center" style="margin-bottom: 8px;">
+                                <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Class="bi" Style="@(Layout.esModoNocturno() ? "margin-right: 8px;color:white" : "margin-right: 8px;")" />
+                                <MudText Class="titulo-proyecto" Style="@(Layout.esModoNocturno() ? "color:white;" : "")">@context.Name</MudText>
+
+                            </div>
+                            <div class="d-flex flex-column">
+
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+                                    <span class="text-task">Fecha Contrato: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.FechaPrevistaContrato.ToString("dd/MM/yy")</span></span>
+                                </div>
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.EventNote" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+                                    <span class="text-task">Fecha Entrega: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.FechaPrevistaEntrega.ToString("dd/MM/yy")</span></span>
+                                </div>
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.AccessTime" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+
+                                    <span class="text-task">Horas Estimadas: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.HorasEstimadas</span></span>
+                                </div>
+                                
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.AccessTime" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+
+                                    <span class="text-task">Horas Estimadas Semanales: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.HorasEstimadasSemanales</span></span>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.AccessTime" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+
+                                    <span class="text-task">Horas Realizadas: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@(CalcularHorasTotalesCached(context.Id))</span></span>
+
+
+                                </div>
+
+
+                                <div class="d-flex align-items-center">
+
+                                    <MudIcon Icon="@Icons.Material.Filled.People" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+                                    <span class="text-task">Cliente: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.Cliente</span></span>
+                                </div>
+
+
+                            </div>
+
+                        </MudPaper>
+                    }
+                </ItemRenderer>
+
+            </MudDropContainer>
+        }
+        else
+        {
+            <br/>
+            <div style="display:flex; align-items:center; justify-content:center">
+                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+            </div>
+        }
+
+        <MudDialog @bind-IsVisible="@_uploadInProgress">
+            <DialogContent>
+                <MudText Typo="Typo.h6" Align="Align.Center">Cargando Pagina Estados Proyecto.</MudText>
+                <br />
+                <MudProgressLinear Value="@progress" Striped="true" Buffer="true" BufferValue="@progressBuffer" />
+                <br />
+                <MudText Align="Align.Center">@progressText</MudText>
+            </DialogContent>
+        </MudDialog>
+    }
+    else if (menuRol == null)
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <MudToolBar DisableGutters="true" Class="d-flex" Style="@(Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; padding: 0 10px; justify-content: flex-end;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.Palette.Primary.ToString()}; padding: 0 10px; justify-content: flex-end;")"></MudToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+@*<div class="d-flex flex-row floating-button">
+        <MudMenu Color="Color.Primary" AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight">
+            <ActivatorContent>
+                <MudAvatar Color="Color.Primary" Style="height:70px; width:70px; font-size:2rem;">
+                    <MudIcon Icon="@Icons.Material.Filled.RemoveRedEye" />
+                </MudAvatar>
+            </ActivatorContent>
+            <ChildContent>
+                @foreach (var item in _sections)
+                {
+                    <MudMenuItem Style="width: 250px; height: 50px;">
+                        <MudCheckBox Label="@item.Name" @bind-Checked="@item.IsChecked" @onclick="@(() => UpdateCheckedStatus(item))"></MudCheckBox>
+                    </MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
+    </div>*@
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    private bool render = true;
+    Stack<CPMUser> navegacionUsuarios = new Stack<CPMUser>();
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    private bool IsChecked;
+    List<Proyecto> lstProyecto = new List<Proyecto>();
+    public Proyecto proyecto { get; set; }
+    public Estado estado { get; set; }
+    public EstadoProyectoUsuario estadoProyectoUsuario { get; set; }
+    public Cliente cliente { get; set; }
+    public CPMUser usuario { get; set; }
+    private List<String> _selectedClientes = new List<String>();
+    private List<String> _selectedEstados = new List<String>();
+
+    private List<KanBanSections> _sections = new List<KanBanSections>();
+    private List<Estado> _estados = new List<Estado>();
+
+    private int horasTotales = 0;
+    private List<HoraItem> _items = new List<HoraItem>();
+
+    private string styleValue;
+
+
+
+    protected override void OnParametersSet()
+    {
+        int anchoPorEstado = 300; // Ancho fijo por cada columna de estado.
+        int numeroDeEstados = _selectedEstados.Count;
+        int anchoTotal = 200 +(anchoPorEstado * numeroDeEstados);
+        if (Layout.esModoNocturno())
+        {
+            if (anchoTotal < 1500)
+            {
+                styleValue = $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 1500;  background-color: {tema.Theme.PaletteDark.Primary.ToString()}; justify-content: center;";
+            }
+            else
+            {
+                styleValue = $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: {anchoTotal}px; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; justify-content: center;";
+            }
+        }
+        else
+        {
+            if (anchoTotal < 1500)
+            {
+                styleValue = $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 1500;  background-color: {tema.Theme.Palette.Primary.ToString()}; justify-content: center;";
+            }
+            else
+            {
+                styleValue = $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: {anchoTotal}px; background-color: {tema.Theme.Palette.Primary.ToString()}; justify-content: center;";
+            }
+        }
+       
+    }
+
+    /*private List<ColorStatus> _color = new List<ColorStatus>
+      {
+      new ColorStatus("PENDIENTE", "#edffb3", "#f9ffe6"),
+      new ColorStatus("EN PROGRESO", "#b3ffed", "#e6fff9"),
+      new ColorStatus("PTE ANALISIS", "#edb3ff", "#f9e6ff"),
+      new ColorStatus("ENTREGADO", "#b3ffb3", "#e6ffe6"),
+      new ColorStatus("ACEPTADO", "#b3daff", "#e6f3ff"),
+      new ColorStatus("PTE RECIBIR INFO (CLIENTE)", "#ffffb3", "#ffffe6"),
+      new ColorStatus("PRUEBAS", "#ffdab3", "#fff3e6"),
+      new ColorStatus("CORRECCION ERRORES", "#ffb3b3", "#ffe6e6"),
+      new ColorStatus("PTE ACEPTACION", "#ffb3ed", "#ffe6f9"),
+    };*/
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        await obtenerUsuario();
+        url = GetLastSegmentUrl();
+        idMenu = GetIdMenu(url);
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+        Cargando = false;
+        await cargarProyectos();
+        await cargarClientes();
+        await cargarSection();
+        StateHasChanged();
+
+        _selectedEstados = _sections.Where(s => _tasks.Any(t => t.Status == s.Name) && !s.Oculto).Select(s => s.Name).ToList();
+    }
+    
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(NavigationManager.Uri);
+        Uri basePath = new Uri(NavigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private MudDropContainer<KanbanTaskItem> _dropContainer;
+
+    private bool _addSectionOpen;
+
+    private async Task TaskUpdated(MudItemDropInfo<KanbanTaskItem> info)
+    {
+        info.Item.Status = info.DropzoneIdentifier;
+        await UpdateProjectStatus(info.Item.Name, info.DropzoneIdentifier);
+    }
+
+    public class ColorStatus
+    {
+        public string Name { get; set; }
+        public string ColorHeader { get; set; }
+        public string ColorBackground { get; set; }
+
+        public ColorStatus(string name, string colorHeader, string colorBackground)
+        {
+            Name = name;
+            ColorHeader = colorHeader;
+            ColorBackground = colorBackground;
+        }
+    }
+    private List<ColorStatus> _color = new();
+
+    public class KanBanSections
+    {
+        public string Name { get; init; }
+        public bool NewTaskOpen { get; set; }
+        public string NewTaskName { get; set; }
+        public bool IsChecked { get; set; }
+        public bool Oculto { get; set; }
+
+        public KanBanSections(string name, bool newTaskOpen, string newTaskName, bool isChecked, bool oculto)
+        {
+            Name = name;
+            NewTaskOpen = newTaskOpen;
+            NewTaskName = newTaskName;
+            IsChecked = isChecked;
+            Oculto = oculto;
+        }
+    }
+
+    public class KanbanTaskItem
+    {
+        public int Id { get; init; }
+        public string Name { get; init; }
+        public string Status { get; set; }
+        public DateTime FechaPrevistaContrato { get; set; }
+        public DateTime FechaPrevistaEntrega { get; set; }
+        public int HorasEstimadas { get; set; }
+        public int HorasEstimadasSemanales { get; set; }
+        public string Cliente { get; set; }
+
+        public KanbanTaskItem(int id, string name, string status, DateTime fechaPrevistaContrato, DateTime fechaPrevistaEntrega, int horasEstimadas, int horasEstimadasSemanales, string cliente)
+        {
+            Id = id;
+            Name = name;
+            Status = status;
+            FechaPrevistaContrato = fechaPrevistaContrato;
+            FechaPrevistaEntrega = fechaPrevistaEntrega;
+            HorasEstimadas = horasEstimadas;
+            HorasEstimadasSemanales = horasEstimadasSemanales;
+            Cliente = cliente;
+        }
+    }
+
+    private List<KanbanTaskItem> _tasks = new();
+
+    public class KanbanClientes
+    {
+        public int Id { get; init; }
+        public string Nombre { get; init; }
+
+        public KanbanClientes(int id, string nombre)
+        {
+            Id = id;
+            Nombre = nombre;
+        }
+    }
+    private List<KanbanClientes> _clientes = new List<KanbanClientes>();
+
+    KanBanNewForm newSectionModel = new KanBanNewForm();
+
+    public class KanBanNewForm
+    {
+        public string Name { get; set; }
+    }
+
+    private void OnValidSectionSubmit(EditContext context)
+    {
+        _sections.Add(new KanBanSections(newSectionModel.Name, false, String.Empty, true, false));
+        newSectionModel.Name = string.Empty;
+        _addSectionOpen = false;
+    }
+
+    private void OpenAddNewSection()
+    {
+        _addSectionOpen = true;
+    }
+
+    private async Task cargarSection()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        _estados = _estados = ctx.Estados.OrderBy(e => e.Orden).ToList();
+
+        var usuario = Layout.usuario;
+
+// Inicializar las secciones Kanban con los estados de la base de datos y la información del usuario
+        _sections = _estados
+            .Select(estado =>
+            {
+// Buscar el registro
+                var estadoUsuario = ctx.EstadoProyectoUsuarios
+                    .Where(eu => eu.Usuario.Id == usuario.Id).FirstOrDefault(eu => eu.Estado.Id == estado.Id);
+                if (estadoUsuario != null)
+                {
+                    IsChecked = estadoUsuario.isChecked;
+                }
+                else
+                {
+                    IsChecked = false;
+                }
+
+                return new KanBanSections(
+                    estado.Nombre,
+                    false,
+                    String.Empty,
+                    IsChecked,
+                    estado.Oculto
+                );
+            }).ToList();
+
+        _color = _estados.Select(estado => new ColorStatus(
+            estado.Nombre,
+            estado.Color,
+            LightenColor(estado.Color)
+        )).ToList();
+    }
+
+    private async Task cargarProyectos()
+    {
+        _tasks = await Crud.GetAllProyectosKanban();
+    }
+
+    private List<KanbanTaskItem> FiltrarProyecto()
+    {
+        return _tasks.Where(it => (!_selectedClientes.Any() || _selectedClientes.Any(s => s == it.Cliente))).ToList();
+    }
+
+    private List<KanBanSections> FiltrarEstado()
+    {
+        return _sections.Where(it => (!_selectedEstados.Any() || _selectedEstados.Any(s => s == it.Name))).ToList();
+    }
+
+    private async Task cargarClientes()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+// Consultar los clientes desde la base de datos
+        var clientes = ctx.Clientes.ToList<Cliente>();
+
+        _clientes = clientes.Select(cliente => new KanbanClientes(
+            cliente.Id,
+            cliente.Nombre)
+        ).ToList();
+    }
+
+    private async Task UpdateProjectStatus(string projectName, string newStatus)
+    {
+// Consultar el estado con el nombre proporcionado en la base de datos.
+        var estadoToUpdate = _ApplicationDbContext.Estados.FirstOrDefault(e => e.Nombre == newStatus);
+
+// Consultar el proyecto con el nombre proporcionado en la base de datos.
+        var projectToUpdate = _ApplicationDbContext.Proyectos.FirstOrDefault(p => p.Nombre == projectName);
+
+// Verifica si se encontraron tanto el proyecto como el estado en la base de datos.
+        if (projectToUpdate != null && estadoToUpdate != null)
+        {
+// Actualiza el estado del proyecto con el estado encontrado.
+            projectToUpdate.Estado = estadoToUpdate;
+
+// Guarda los cambios en la base de datos.
+            _ApplicationDbContext.SaveChanges();
+        }
+    }
+
+    private async Task UpdateCheckedStatus(IEnumerable<KanBanSections> selectedEstado)
+    {
+        foreach (var item in selectedEstado)
+        {
+// Cambia el estado del ischecked
+            item.IsChecked = !item.IsChecked;
+
+            var usuario = await _UserManager.GetUserAsync(_httpContextAccessor.HttpContext.User);
+
+            var estado = _ApplicationDbContext.Estados.FirstOrDefault(e => e.Nombre == item.Name);
+
+            if (estado != null)
+            {
+// Busca el registro
+                var estadoUsuario = _ApplicationDbContext.EstadoProyectoUsuarios
+                    .FirstOrDefault(eu => eu.Usuario.Id == usuario.Id && eu.Estado.Id == estado.Id);
+
+                if (estadoUsuario != null)
+                {
+// Actualiza el registro existente
+                    estadoUsuario.isChecked = item.IsChecked;
+                }
+                else
+                {
+// Crea un nuevo registro si no existe
+                    estadoUsuario = new EstadoProyectoUsuario
+                    {
+                        Usuario = usuario,
+                        Estado = estado,
+                        isChecked = item.IsChecked
+                    };
+
+                    _ApplicationDbContext.EstadoProyectoUsuarios.Add(estadoUsuario);
+                }
+
+                _ApplicationDbContext.SaveChanges();
+                StateHasChanged();
+            }
+        }
+    }
+
+
+    public static string LightenColor(string colorHex)
+    {
+        if (!colorHex.StartsWith("#") || (colorHex.Length != 7 && colorHex.Length != 9))
+        {
+            throw new ArgumentException("Formato de color hexadecimal no válido.", nameof(colorHex));
+        }
+
+// Convertir el colorHex a valores RGB y alfa
+        byte r = Convert.ToByte(colorHex.Substring(1, 2), 16);
+        byte g = Convert.ToByte(colorHex.Substring(3, 2), 16);
+        byte b = Convert.ToByte(colorHex.Substring(5, 2), 16);
+        byte a = colorHex.Length == 9 ? Convert.ToByte(colorHex.Substring(7, 2), 16) : (byte)255;
+
+// Aclarar los componentes RGB
+        r = (byte)(r + (255 - r) * 0.8);
+        g = (byte)(g + (255 - g) * 0.8);
+        b = (byte)(b + (255 - b) * 0.8);
+
+// Convertir los valores a formato hexadecimal
+        string nuevoColorHex = $"#{r:X2}{g:X2}{b:X2}{a:X2}";
+
+        return nuevoColorHex;
+    }
+
+    private void HandleClick(int Id)
+    {
+        _navigationManager.NavigateTo($"/Proyectos/{Id}", true);
+    }
+
+    private bool CanDrop(KanbanTaskItem item, string column)
+    {
+        return menuRol.Editar;
+    }
+
+    private async Task ToggleSelection(string item, List<String> lista)
+    {
+        if (lista.Contains(item))
+        {
+            lista.Remove(item);
+        }
+        else
+        {
+            lista.Add(item);
+        }
+        OnParametersSet();
+        render = false;
+        StateHasChanged();
+        await Task.Delay(1);
+        render = true;
+        StateHasChanged();
+        await Task.Delay(1);
+    }
+
+    private string TextSelection(string item, List<String> lista)
+    {
+        var texto = "";
+
+        if (lista.Count == 0)
+        {
+            texto = item;
+        }
+        else if (lista.Count == 1)
+        {
+            texto = lista.FirstOrDefault();
+        }
+        else
+        {
+            texto = "2 " + item + " o más seleccionados";
+            texto = texto.Substring(0, Math.Min(texto.Length, 25)) + "...";
+        }
+
+        return texto;
+    }
+
+    private class HoraItem : CalendarItem
+    {
+        public int Hora { get; set; }
+    }
+
+    private int CalcularHorasTotales(int projectId)
+    {
+        _items.Clear();
+        var checkinCheckouts = _ApplicationDbContext.CheckinCheckouts
+            .Include(it => it.Usuario).ThenInclude(it => it.Rol)
+            .Where(cc => cc.Proyecto.Id == projectId)
+            .OrderBy(cc => cc.Usuario.Id)
+            .ThenBy(cc => cc.Fecha)
+            .ToList();
+
+        var horasPorUsuarioYDia = new Dictionary<string, Dictionary<DateTime, int>>();
+
+        foreach (var checkinCheckout in checkinCheckouts)
+        {
+            if (!horasPorUsuarioYDia.TryGetValue(checkinCheckout.Usuario.Id, out var fechaHoras))
+            {
+                fechaHoras = new Dictionary<DateTime, int>();
+                horasPorUsuarioYDia[checkinCheckout.Usuario.Id] = fechaHoras;
+            }
+
+            if (checkinCheckout.Entrada)
+            {
+                fechaHoras[checkinCheckout.Fecha.Date] = checkinCheckout.Fecha.Hour;
+            }
+            else if (fechaHoras.TryGetValue(checkinCheckout.Fecha.Date, out var horaInicio))
+            {
+                int horasTrabajadas = checkinCheckout.Fecha.Hour - horaInicio;
+                if (horasTrabajadas > 0)
+                {
+                    decimal porcentajeConversion = checkinCheckout.Usuario.Rol.PorcentajeConversion;
+                    int horasConvertidas = (int)(horasTrabajadas * porcentajeConversion);
+
+                    var item = _items.FirstOrDefault(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date);
+                    if (item == null)
+                    {
+                        _items.Add(new HoraItem
+                        {
+                            Start = checkinCheckout.Fecha.Date,
+                            Text = checkinCheckout.Usuario.Nombre,
+                            Hora = horasConvertidas
+                        });
+                    }
+                    else
+                    {
+                        item.Hora += horasConvertidas;
+                    }
+                }
+
+                fechaHoras.Remove(checkinCheckout.Fecha.Date);
+            }
+        }
+
+        return _items.Sum(item => item.Hora);
+    }
+
+    private Dictionary<int, int> _horasTotalesCache = new Dictionary<int, int>();
+
+    private int CalcularHorasTotalesCached(int projectId)
+    {
+        if (_horasTotalesCache.ContainsKey(projectId))
+        {
+            return _horasTotalesCache[projectId];
+        }
+        else
+        {
+            int horasTotales = CalcularHorasTotales(projectId);
+            _horasTotalesCache.Add(projectId, horasTotales);
+            return horasTotales;
+        }
+    }
+
+
+}

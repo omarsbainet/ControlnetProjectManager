@@ -1,0 +1,151 @@
+﻿@page "/Proyectos/{id}"
+@inherits LayoutComponentBase
+@inject NavigationManager _navigationManager;
+@inject IHttpContextAccessor _httpContextAccessor
+@inject UserManager<CPMUser> _UserManager
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbContextFactory
+@inject CRUD Crud
+
+@using Microsoft.Identity
+@using Controlnet_Project_Manager.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using MudBlazor.Utilities
+@using System.Reflection;
+@using System.ComponentModel;
+
+@if (_proyecto != null && (esAdmin || esProgramador))
+{
+    <ToolBarProyecto Proyecto="@_proyecto" usuario="@usuario" LoadingNewProyect="@Cargando"></ToolBarProyecto>
+}
+else
+{
+    <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    bool esProgramador = false;
+    bool esAdmin = false;
+    Controlnet_Project_Manager.Areas.Identity.Data.Proyecto _proyecto;
+    public ProgramadoresProyecto programadoresProyecto { get; set; }
+    public CPMUser usuario { get; set; }
+    private bool Cargando = true;
+    private bool firstLoad = true;
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+
+    [Parameter] 
+    public string id { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await Load();
+        }
+    }
+
+    private async Task Load()
+    {
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            if (usuario.Rol.Id == 1)
+            {
+                esAdmin = true;
+            }
+
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+
+            await using var ctx = await DbContextFactory.CreateDbContextAsync();
+            if (firstLoad)
+            {
+                firstLoad = false;
+                _navigationManager.LocationChanged += HandleLocationChanged;
+            }
+
+            if (int.TryParse(id, out int proyectoId))
+            {
+                if (ctx != null)
+                {
+                    _proyecto = await ctx.Proyectos.Include(it => it.Desarrollos).ThenInclude(it => it.EstadoDesarrollo).Include(it => it.Incidencias).ThenInclude(it => it.EstadoIncidencia).FirstOrDefaultAsync(p => p.Id == proyectoId);
+                    var lstProgramadores = ctx.Users.Where(e => ctx.ProgramadoresProyectos.Any(pro => pro.Programador.Id == e.Id && pro.Proyecto.Id == proyectoId)).ToList();
+                    esProgramador = lstProgramadores.Any(it => it.Id == usuario.Id);
+                    Cargando = false;
+                    StateHasChanged();
+                }
+            }
+        }
+
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async void HandleLocationChanged(object sender, LocationChangedEventArgs e)
+    {
+        await HandleLocationChangedAsync();
+    }
+
+    private async Task HandleLocationChangedAsync()
+    {
+        Cargando = true;
+        await Task.Delay(10);
+        StateHasChanged();
+        //indicas que está cargando, entonces cargas los datos con un poco de delay para darle tiempo a la UI
+        await Load();
+        await Task.Delay(10);
+        StateHasChanged();
+    }
+
+    // Hay que limpiar el evento al salir del componente
+    public void Dispose()
+    {
+        _navigationManager.LocationChanged -= HandleLocationChanged;
+    }
+}

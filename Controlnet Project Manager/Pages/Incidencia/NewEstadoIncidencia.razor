@@ -1,0 +1,124 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+<style>
+    .color {
+        background-color: @Estadoincidencia.Color;
+        height: 20px;
+        width: 20px;
+        border: 1px solid #ccc;
+        display: inline-block;
+    }
+</style>
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper>
+                        <MudTextField @bind-Value="Estadoincidencia.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudCheckBox @bind-Checked="Estadoincidencia.CierraIncidencia" Label="Cierra Incidencia" />
+                        <MudCheckBox @bind-Checked="Estadoincidencia.EstadoCl" Label="Estado para Clientes" />
+                        <MudColorPicker Label="Color" @bind-Text="Estadoincidencia.Color" Required="true" RequiredError="Debe indicar color" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public EstadoIncidencia Estadoincidencia { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (Estadoincidencia == null)
+        {
+            Estadoincidencia = new EstadoIncidencia();
+        }
+
+        if (Estadoincidencia.Id != 0 && Estadoincidencia.Id != null)
+        {
+            Estadoincidencia = _ApplicationDbContext.EstadosIncidencias.FirstOrDefault(u => u.Id == Estadoincidencia.Id);
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Estadoincidencia).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (Estadoincidencia.Id != 0 && Estadoincidencia.Id != null)
+                {
+                    _ApplicationDbContext.EstadosIncidencias.Update(Estadoincidencia);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(Estadoincidencia.Nombre))
+                    {
+                        _ApplicationDbContext.EstadosIncidencias.Add(Estadoincidencia);
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del proyecto es obligatorio");
+                        return;
+                    }
+                }
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<EstadoIncidencia>(Estadoincidencia));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+    // private async Task Eliminar()
+    // {
+    //     var result = await DialogService.ShowMessageBox("Eliminar una incidencia", "¿Seguro que quieres eliminar esta incidencia?", "Si", "No");
+
+    //     if (result is true)
+    //     {
+    //         _ApplicationDbContext.EstadosIncidencias.Remove(Estadoincidencia);
+    //         await _ApplicationDbContext.SaveChangesAsync();
+    //         MudDialog.Close(DialogResult.Ok<Incidencia>(new Incidencia()));
+    //     }
+    // }
+}

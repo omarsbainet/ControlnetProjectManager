@@ -1,0 +1,179 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Controlnet_Project_Manager.Pages.Desarrollo
+@using Controlnet_Project_Manager.Pages.Incidencia
+
+@using System.Reflection;
+@using System.ComponentModel;
+@using static Controlnet_Project_Manager.Pages.Index
+
+@using Controlnet_Project_Manager.Shared.Model
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject CRUD Crud;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+@{
+    if(icono)
+    {
+        <NewDesarrollo proyecto="@peticion.Proyecto" onChangeIcon="CambioComponente" OnGetListaDocumentoDesarrollo="TransformarListaDocDesarrollo" OnGetDataDesarrollo="TransformarDatosDesarrollo" desarrollo="desarrollo" usuario="@usuario" OnNewDesarollo="SubmitDesarrollo" peticion="@peticion" listaDocumentoPeticion="@listaDocumentoPeticion"></NewDesarrollo>
+    }
+    else
+    {
+        <NewIncidencia proyecto="@peticion.Proyecto" onChangeIcon="CambioComponente" OnGetListaDocumentoIncidencia="TransformarListaDocIncidencia" OnGetDataIncidencia="TransformarDatosIncidencia" incidencia="incidencia" usuario="@usuario" OnNewIncidencia="SubmitIncidencia" peticion="@peticion" listaDocumentoPeticion="@listaDocumentoPeticion"></NewIncidencia>
+    }
+}
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Peticion peticion { get; set; }
+    [Parameter] public CPMUser usuario { get; set; }
+
+    private Desarrollo desarrollo;
+    private Incidencia incidencia;
+    private List<DocumentoPeticion> listaDocumentoPeticion = new List<DocumentoPeticion>();
+    private bool icono = true;
+    private bool submitFinalizadoDesarrollo = false;
+    private bool submitFinalizadoincidencia = false;
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await base.OnInitializedAsync();
+
+            await cargarDocs(peticion.Id);
+
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    protected void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    protected async Task CambioComponente(bool icon)
+    {
+        this.icono = icon;
+    }
+
+    protected async Task TransformarDatosDesarrollo(Desarrollo desarrollo)
+    {
+        this.incidencia = new();
+
+        this.incidencia.FechaCreacion = DateTime.Now;
+        this.incidencia.FechaCerrada = desarrollo.FechaEntrega;
+        this.incidencia.Autor = desarrollo.Autor;
+        this.incidencia.Informacion = desarrollo.Informacion;
+        this.incidencia.Nombre = desarrollo.Nombre;
+        this.incidencia.UsuarioAsignado = desarrollo.UsuarioAsignado;
+    }
+
+    protected async Task TransformarDatosIncidencia(Incidencia incidencia)
+    {
+        this.desarrollo = new();
+
+        this.desarrollo.FechaCreacion = DateTime.Now;
+        this.desarrollo.FechaEntrega = incidencia.FechaCerrada.Value;
+        this.desarrollo.Autor = incidencia.Autor;
+        this.desarrollo.Informacion = incidencia.Informacion;
+        this.desarrollo.Nombre = incidencia.Nombre;
+        this.desarrollo.UsuarioAsignado = incidencia.UsuarioAsignado;
+    }
+
+
+    protected async Task TransformarListaDocDesarrollo(List<DocumentoDesarrollo> listaDocDesarrollo)
+    {
+        listaDocumentoPeticion.Clear();
+        foreach (var desarrollo in listaDocDesarrollo)
+        {
+            DocumentoPeticion docPeticion = new DocumentoPeticion
+                {
+                    Peticion = this.peticion,
+                    Nombre = desarrollo.Nombre,
+                    Documento = desarrollo.Documento
+                };
+            listaDocumentoPeticion.Add(docPeticion);
+        }
+    }
+
+    protected async Task TransformarListaDocIncidencia(List<DocumentoIncidencia> listaDocIncidencia)
+    {
+        listaDocumentoPeticion.Clear();
+        foreach (var incidencia in listaDocIncidencia)
+        {
+            DocumentoPeticion docPeticion = new DocumentoPeticion
+                {
+                    Peticion = this.peticion,
+                    Nombre = incidencia.Nombre,
+                    Documento = incidencia.Documento
+                };
+            listaDocumentoPeticion.Add(docPeticion);
+        }
+    }
+
+    protected async Task SubmitDesarrollo(Desarrollo desarrollo)
+    {
+        if (desarrollo != null)
+        {
+            peticion.Desarrollo = desarrollo;
+            peticion.Aceptado = true;
+
+            _ApplicationDbContext.Peticiones.Update(peticion);
+            _ApplicationDbContext.SaveChanges();
+
+            MudDialog.Close(DialogResult.Ok<Peticion>(peticion));
+        }
+        else
+        {
+            await _dialogService.ShowMessageBox("Error", "Es obligatorio seleccionar el destino de la peticion");
+
+        }
+
+    }
+
+
+    protected async Task SubmitIncidencia(Incidencia incidencia)
+    {
+        if (incidencia != null)
+        {
+            peticion.Incidencia = incidencia;
+            peticion.Aceptado = true;
+
+            _ApplicationDbContext.Peticiones.Update(peticion);
+            _ApplicationDbContext.SaveChanges();
+
+            MudDialog.Close(DialogResult.Ok<Peticion>(peticion));
+        }
+        else
+        {
+            await _dialogService.ShowMessageBox("Error", "Es obligatorio seleccionar el destino de la peticion");
+
+        }
+    }
+
+    async Task cargarDocs(int idPeticion)
+    {
+        listaDocumentoPeticion = _ApplicationDbContext.DocumentosPeticiones
+            .Where(doc => doc.Peticion.Id == idPeticion)
+            .ToList();
+    }
+}

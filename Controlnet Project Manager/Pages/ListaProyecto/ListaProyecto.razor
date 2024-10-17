@@ -1,0 +1,600 @@
+﻿@page "/Proyectos"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using System.Reflection;
+@using System.ComponentModel;
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using GemBox.Spreadsheet
+@using Microsoft.JSInterop;
+@using System.Diagnostics
+
+
+
+
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager _navigationManager
+
+
+    @{
+    List<Button> botones = new List<Button>()
+        {
+            new ActionButton { Text = "Nuevo Proyecto",  OnClick = NewProDialog , Icon = @Icons.Material.Filled.Add },
+            new ActionButton { Text = "Exportar Excel", OnClick = ExportarProyectosExcel, Icon = @Icons.Custom.FileFormats.FileExcel }
+
+        };
+}
+@if(!Cargando){
+
+    @if (menuRol != null)
+    {
+
+        @if (menuRol != null && menuRol.Crear)
+        {
+            <ToolBar Title="PROYECTOS" ButtonsLeft="botones"></ToolBar>
+          
+          
+        }
+        else
+        {
+            <ToolBar Title="PROYECTOS"></ToolBar>
+        }
+     
+
+
+        <br />
+        <br />
+        <MudDataGrid @ref="@_grid" Items="@FiltrarProyecto()" T="Proyecto" RowClick="@((x) => EditProyectDialog(x.Item))"
+        Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true"
+        Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Proyectos</MudText>
+
+                <MudSpacer />
+                <MudSpacer />
+                <MudTextField T="string" TextChanged="ActualizarBusqueda" @bind-Value="_searchString" Margin="Margin.Dense"
+                Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+                </MudTextField>
+            </ToolBarContent>   
+
+        <Columns>
+            @*Represantacion De los Datos de los proyectos*@
+            @*<PropertyColumn T="Proyecto" TProperty="string" Property="x=> x.Nombre" Title="Nombre" @onclick="() => HandleClick(proyectos)"/>*@
+            <TemplateColumn SortBy="x=> x.Nombre">
+                    <HeaderTemplate>Nombre</HeaderTemplate>
+                    <CellTemplate>
+                        <MudText @key="context.Item" Class="cursor-pointer" @onclick="() => HandleClick(context.Item)">@context.Item.Nombre</MudText>
+                    </CellTemplate>
+            </TemplateColumn>
+            @* <PropertyColumn T="Proyecto" TProperty="string" Property="x=> x.Estado== null? null : x.Estado.Nombre" Title="Estado" /> *@
+            <TemplateColumn SortBy="x => x.Estado == null ? null : x.Estado.Nombre">
+                <HeaderTemplate>Estado</HeaderTemplate>
+                    <CellTemplate>
+                        <span @onclick:stopPropagation="true"> <!-- Evitar que se propague el click a RowClick-->
+                            <MudChip Color="Color.Primary" OnClick="@(async (e) => { if (menuRol != null && menuRol.Editar) EditEstadoDialog(context.Item); })">
+                                @context.Item.Estado?.Nombre
+                                <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="margin-3px"></MudIcon>
+                            </MudChip>
+                        </span>
+                    </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn T="Proyecto" TProperty="DateTime" Property="x => x.FechaPrevistaContrato" Title="Fecha Prevista Inicio" Format="dd/MM/yyyy" />
+            <PropertyColumn T="Proyecto" TProperty="DateTime" Property="x => x.FechaPrevistaEntrega" Title="Fecha Prevista Entrega" Format="dd/MM/yyyy" />
+            <PropertyColumn T="Proyecto" TProperty="int" Property="x=> x.HorasEstimadas" Title="Horas Estimadas" />
+                @*Muestra las horas estimadas semanales por proyecto*@
+                <TemplateColumn Sortable="false">
+                    <HeaderTemplate>
+                        Horas Estimadas Semanales
+                    </HeaderTemplate>
+                    <CellTemplate>
+                        @CalcularHorasEstimadasSemanales(context.Item.Id)
+                    </CellTemplate>
+                </TemplateColumn>
+                @* Muestra las horas realizadas para cada proyecto *@
+            <TemplateColumn Sortable="false">
+                <HeaderTemplate>
+                        Horas Realizadas
+                </HeaderTemplate>
+                <CellTemplate>
+                @CalcularHorasRealizadas(context.Item.Id)    
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn T="Proyecto" TProperty="string" Property="x=> x.Cliente== null? null : x.Cliente.Nombre" Title="Cliente" />
+                <TemplateColumn Sortable="false">
+                    <CellTemplate>
+                        <div style ="display: flex;">
+                            @if (menuRol != null && menuRol.Editar)
+                            {
+                                <MudTooltip Text="Editar Proyecto">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@((e) => { EditProyectDialog(context.Item); })" />
+                                </MudTooltip>
+                            }
+                            @if (menuRol != null && menuRol.Eliminar)
+                            {
+                                <MudTooltip Text="Eliminar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@((e) => { EliminarProyecto(context.Item); })" />
+                                </MudTooltip>
+                            }
+                        </div>
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            @*    //Paginacion*@
+            <PagerContent>
+                <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+            </PagerContent>
+        </MudDataGrid>
+
+
+        <MudDialog @bind-IsVisible="@_uploadInProgress">
+            <DialogContent>
+                <MudText Typo="Typo.h6" Align="Align.Center">Cargando Proyectos...</MudText>
+                <br />
+                <MudProgressLinear Value="@progress" Striped="true" Size="Size.Medium" Buffer="true" BufferValue="@progressBuffer" />
+                <br />
+                <MudText Align="Align.Center">@progressText</MudText>
+                </DialogContent>
+            </MudDialog>
+    }
+    else if (menuRol == null)
+    {
+        <MudText Typo
+        ="Typo.h6" Align
+        ="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+    else
+    {
+        <ToolBar Title="PROYECTOS"></ToolBar>
+        <br />
+        <div style="display:flex; align-items:center; justify-content:center">
+            <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+        </div>
+    }
+    @if (Renderizar)
+    {
+        Renderizar = false;
+    }
+}
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    public Proyecto proyectos { get; set; }
+    Stack<Proyecto> navegacionProyecto = new Stack<Proyecto>();
+    public bool activados = true;
+    public string estados = "";
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    string _searchString = "";
+    List<Proyecto> lstProyecto = new List<Proyecto>();
+    private MudDataGrid<Proyecto> _grid;
+    private int _selectedPage;
+    List<Estado> lstEstadoProyecto = new List<Estado>();
+    private bool cambiarEstado = false;
+    private bool mostrarModal = false;
+    private Estado estadoSeleccionado;
+    public CPMUser usuario { get; set; }
+    [Inject] Microsoft.AspNetCore.Components.NavigationManager Navigation { get; set; }
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    private bool hasDialogOpened = false;
+    //Variable para permitir renderizar la pagina
+    private bool Renderizar;
+    private int horasSemanalesEstimadas = 0;
+
+    /*Codigo añadido para el calculo de las horas realizadas*/
+    private List<HoraItem> _items = new List<HoraItem>();
+
+    private void PageChanged(int i)
+    {
+        Renderizar = true;
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    private List<Proyecto> FiltrarProyecto()
+    {
+        return lstProyecto.FindAll(it =>
+            (it.Nombre != null && it.Nombre.ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.FechaPrevistaEntrega.ToString().ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.FechaPrevistaContrato.ToString().ToUpper().Contains(_searchString.ToUpper())));
+
+    }
+
+    private async Task<List<Proyecto>> cargarProyectos()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        lstProyecto = await ctx.Proyectos.Include(it => it.Estado).Include(it => it.Cliente).ToListAsync();
+
+        return lstProyecto;
+    }
+
+    void limpiarNavegacion()
+    {
+        navegacionProyecto.Clear();
+        navegacionProyecto.Push(proyectos);
+        StateHasChanged();
+    }
+
+    void volverAtras()
+    {
+        navegacionProyecto.Pop();
+        StateHasChanged();
+    }
+
+    private async Task VerProyecto(Proyecto pro)
+    {
+        navegacionProyecto.Push(_ApplicationDbContext.Proyectos.FirstOrDefault(u => u.Id == pro.Id));
+        await cargarProyectos();
+        StateHasChanged();
+    }
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        Renderizar = true;
+
+        //usuario = Layout.usuario;
+        await obtenerUsuario();
+        url = GetLastSegmentUrl();
+        idMenu = GetIdMenu(url);
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+        Cargando = false;
+        navegacionProyecto.Push(proyectos);
+        await cargarProyectos();
+        _selectedPage = 0;
+    }
+
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private int CalcularHorasEstimadasSemanales(int idProyecto)
+    {
+        using (var context = DbFactory.CreateDbContext())
+        {
+            var proyecto = context.Proyectos.FirstOrDefault(p => p.Id == idProyecto);
+          //_ApplicationDbContext.Proyectos.FirstOrDefault(p => p.Id == idProyecto);
+
+            if (proyecto != null)
+            {
+                var diferencia = proyecto.FechaPrevistaEntrega - proyecto.FechaPrevistaContrato;
+                var semanasDiferencia = diferencia.Duration().Days / 7;
+                if (semanasDiferencia == 0)
+                {
+                    horasSemanalesEstimadas = proyecto.HorasEstimadas;
+                    return horasSemanalesEstimadas;
+                }
+                else
+                {
+                    horasSemanalesEstimadas = proyecto.HorasEstimadas / semanasDiferencia;
+                    return horasSemanalesEstimadas;
+                }
+            }
+            else
+            {
+                //Si no encuentra el proyecto
+                return 0;
+            }
+        }
+    }
+
+ 
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async void NewProDialog()
+    {
+        Renderizar = true;
+
+        if (!hasDialogOpened)
+        {
+            hasDialogOpened = true;
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Large };
+            var parameters = new DialogParameters();
+            //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+            var dialog = await _dialogService.Show<NewProyectos>("Nuevo proyecto", parameters, options).Result;
+
+            if (dialog.Data != null)
+            {
+                await cargarProyectos();
+                StateHasChanged();
+            }
+            hasDialogOpened = false;
+            await Layout.RecargaMainLayout();
+        }
+
+    }
+
+
+    private async void EliminarProyecto(Proyecto pro)
+    {
+        Renderizar = true;
+        var result = await _dialogService.ShowMessageBox("Eliminar proyecto", "¿Seguro que quieres eliminar el proyecto?", "Si", "No");
+        pro = _ApplicationDbContext.Proyectos.FirstOrDefault(it => it.Id == pro.Id);
+
+        if (result is true && pro != null)
+        {
+
+            _ApplicationDbContext.Proyectos.Remove(pro);
+            await _ApplicationDbContext.SaveChangesAsync();
+
+        }
+
+        _ApplicationDbContext.EstadosIncidencias.OrderBy(it => it.Id).ToList();
+        await cargarProyectos();
+        StateHasChanged();
+
+        await Layout.RecargaMainLayout();
+    }
+
+    //Editar un Proyecto
+    private async Task EditProyectDialog(Proyecto pro)
+    {
+        Renderizar = true;
+
+        if (!hasDialogOpened)
+        {
+            hasDialogOpened = true;
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Large };
+
+            var parameters = new DialogParameters();
+            parameters.Add("Proyecto", pro);
+            //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+            var dialog = await _dialogService.Show<NewProyectos>("Editar proyecto", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                await cargarProyectos();
+                StateHasChanged();
+            }
+            hasDialogOpened = false;
+
+            await Layout.RecargaMainLayout();
+        }
+    }
+
+    //Editar un Estado
+    private async Task EditEstadoDialog(Proyecto pro)
+    {
+        Renderizar = true;
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("Proyecto", pro);
+        var dialog = await (await _dialogService.ShowAsync<EditEstadoProyecto>("Editar estado", parameters, options)).Result;
+        if (dialog.Data != null)
+        {          
+            await cargarProyectos();
+            StateHasChanged();
+        }
+    }
+
+
+    /*codigo añadido para el calculo de horas realizadas*/
+
+    private int CalcularHorasRealizadas(int projectId)
+    {
+        _items.Clear();
+        var checkinCheckouts = new List<CheckinCheckout>();
+        try
+        {
+
+            checkinCheckouts =  _ApplicationDbContext.CheckinCheckouts
+                                    .Include(it => it.Usuario).ThenInclude(it => it.Rol)
+                                    .Where(cc => cc.Proyecto.Id == projectId)
+                                    .OrderBy(cc => cc.Usuario.Id)
+                                    .ThenBy(cc => cc.Fecha)
+                                    .ToList();
+        }
+        catch (Exception e)
+        {
+
+        }
+
+        int horasTotales = 0;
+        Dictionary<string, Dictionary<DateTime, int>> horasPorUsuarioYDia = new Dictionary<string, Dictionary<DateTime, int>>();
+
+        foreach (var checkinCheckout in checkinCheckouts)
+        {
+            if (checkinCheckout.Entrada)
+            {
+                if (!horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id))
+                {
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id] = new Dictionary<DateTime, int>();
+                }
+                horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date] = checkinCheckout.Fecha.Hour;
+            }
+            else if (horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id) &&
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id].ContainsKey(checkinCheckout.Fecha.Date))
+            {
+                int horasTrabajadas = checkinCheckout.Fecha.Hour - horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date];
+                if (horasTrabajadas > 0)
+                {
+                    // Obtener el porcentaje de conversión del rol del usuario
+                    decimal porcentajeConversion = checkinCheckout.Usuario.Rol.PorcentajeConversion;
+
+                    if (!_items.Any(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date))
+                    {
+                        _items.Add(new HoraItem
+                            {
+                                Start = checkinCheckout.Fecha.Date, 
+                                Text = checkinCheckout.Usuario.Nombre,
+                                Hora = (int)(horasTrabajadas * porcentajeConversion) // Conversión explícita a int
+                            });
+                    }
+                    else
+                    {
+                        var existingItem = _items.First(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date);
+                        existingItem.Hora += (int)(horasTrabajadas * porcentajeConversion); // Conversión explícita a int
+                    }
+                }
+                horasPorUsuarioYDia[checkinCheckout.Usuario.Id].Remove(checkinCheckout.Fecha.Date);
+            }
+        }
+
+        horasTotales = _items.Sum(item => item.Hora);
+        return horasTotales;
+    }
+
+    private class HoraItem : CalendarItem
+    {
+        public int Hora { get; set; }
+    }
+
+    private void HandleClick(Proyecto proyectos)
+    {
+        _navigationManager.NavigateTo($"/Proyectos/{proyectos.Id}", false);
+
+    }
+
+
+
+
+    public async void ExportarProyectosExcel()
+    {
+        var listIds = lstProyecto.Select(p => p.Id).ToList();
+        var listaProyectos = _ApplicationDbContext.Proyectos
+                             .Where(p => listIds.Contains(p.Id))
+                             .Include(p => p.Estado) // Suponiendo que Estado es una relación
+                             .Select(p => new clsExportProyectos
+                             {
+                                 NombreProyecto = p.Nombre,
+                                 Estado = p.Estado.Nombre,
+                                 FechaPrevistaContrato = p.FechaPrevistaContrato,
+                                 FechaPrevistaEntrega = p.FechaPrevistaEntrega,
+                                 HorasEstimadas = p.HorasEstimadas,
+                                 HorasSemanalesEstimadas = p.HorasSemanalesEstimadas,
+                                 Cliente = p.Cliente.Nombre
+                             })
+                             .ToList();
+
+        SpreadsheetInfo.SetLicense("E7OT-N392-PMUC-Q7ZS");
+
+        ExcelFile workbook = new ExcelFile();
+        ExcelWorksheet worksheet = workbook.Worksheets.Add("Proyectos");
+        ListtoDataTableConverter converter = new ListtoDataTableConverter();
+
+        List<clsExportProyectos> listaExportar = new List<clsExportProyectos>();
+
+        foreach (var proyecto in listaProyectos)
+        {
+            clsExportProyectos exportProyecto = new clsExportProyectos
+            {
+                NombreProyecto = proyecto.NombreProyecto,
+                Estado = proyecto.Estado,
+                FechaPrevistaEntrega = proyecto.FechaPrevistaContrato,
+                FechaPrevistaContrato = proyecto.FechaPrevistaEntrega,
+                HorasEstimadas = proyecto.HorasEstimadas,
+                HorasSemanalesEstimadas = proyecto.HorasSemanalesEstimadas,
+                Cliente = proyecto.Cliente
+            };
+
+            listaExportar.Add(exportProyecto);
+        }
+
+        DataTable dt = converter.ToDataTable(listaProyectos);
+
+        InsertDataTableOptions options = new InsertDataTableOptions() { ColumnHeaders = true };
+        worksheet.InsertDataTable(dt, options);
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            workbook.Save(memoryStream, GemBox.Spreadsheet.XlsxSaveOptions.XlsDefault);
+            memoryStream.Position = 0;
+
+            await _jSRuntime.InvokeVoidAsync("downloadFile", "proyecto.xlsx", Convert.ToBase64String(memoryStream.ToArray()));
+        }
+
+    }
+
+
+
+
+    class clsExportProyectos
+    {
+        public string NombreProyecto { get; set; }
+        public string Estado { get; set; }
+        public DateTime FechaPrevistaContrato { get; set; }
+        public DateTime FechaPrevistaEntrega { get; set; }
+        public int HorasEstimadas { get; set; }
+        public int HorasSemanalesEstimadas { get; set; }
+        public string Cliente { get; set; }
+
+    }
+
+    //Actualiza la lista de proyectos segun el texto del buscador
+    private async Task ActualizarBusqueda(string searchString)
+    {
+        Renderizar = true;
+        _searchString = searchString;
+        FiltrarProyecto();
+    }
+
+
+    //Metodo que permite si el componente se reenderiza o no
+    protected override bool ShouldRender()
+    {
+        return Renderizar;
+    }
+}

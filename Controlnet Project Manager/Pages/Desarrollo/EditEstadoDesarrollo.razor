@@ -1,0 +1,138 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject UserManager<CPMUser> _UserManager
+<MudDialog>
+    <DialogContent>
+       @*  <MudAutocomplete T="CPMUser" Label="Programador" @bind-Value="desarrollo.UsuarioAsignado" SearchFunc="@Search2"
+                         ResetValueOnEmptyText="@resetValueOnEmptyText"
+                         CoerceText="@coerceText" CoerceValue="@coerceValue"
+                         AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary">
+            <ItemTemplate>
+                @context.Nombre
+            </ItemTemplate>
+        </MudAutocomplete> *@
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudSelect Label="Estado" @bind-Value="desarrollo.EstadoDesarrollo" ToStringFunc="@((s) => { return s?.Nombre;})" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var item in lstEstadoDesarrollo)
+                {
+                    <MudSelectItem Value="@item"></MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Desarrollo desarrollo { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    // Nuevos parámetros recibidos
+    [Parameter] public bool canEdit { get; set; }
+    [Parameter] public bool canFinish { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<EstadoDesarrollo> lstEstadoDesarrollo = new List<EstadoDesarrollo>();
+    List<CPMUser> lstUsers = new List<CPMUser>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (desarrollo.Id != 0 && desarrollo.Id != null)
+        {
+            desarrollo = _ApplicationDbContext.Desarrollos.FirstOrDefault(u => u.Id == desarrollo.Id);
+        }
+        await cargarEstados();
+    }
+
+    private async Task<IEnumerable<CPMUser>> Search2(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstUsers;
+
+        return lstUsers.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(desarrollo).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (desarrollo.Id != 0 && desarrollo.Id != null)
+                {
+                    if (desarrollo.EstadoDesarrollo.FinalizacionDesarrollo)
+                    {
+                        desarrollo.FechaFinalizacion = DateTime.Now;
+                    }
+                    else if (desarrollo.EstadoDesarrollo.Nombre.ToUpper() != "VERIFICADO POR CLIENTE")
+                    {
+                        desarrollo.FechaFinalizacion = null;
+                    }
+                    _ApplicationDbContext.Desarrollos.Update(desarrollo);
+                }
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<Desarrollo>(desarrollo));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    async Task cargarEstados()
+    {
+
+        var userId = _UserManager.GetUserId((await _auth.GetAuthenticationStateAsync()).User);
+        var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == userId);
+
+        if (user.Rol.Name.ToUpper() =="CLIENTE")
+        {
+            lstEstadoDesarrollo = _ApplicationDbContext.EstadosDesarrollos.Where(it => it.EstadoCl == true).OrderBy(it => it.Nombre).ToList();
+        }
+        else
+        {
+            lstEstadoDesarrollo = _ApplicationDbContext.EstadosDesarrollos.OrderBy(it => it.Nombre).ToList();
+        }
+
+        
+    }
+    
+
+}
+

@@ -1,0 +1,118 @@
+﻿@*@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject ApplicationDbContext _ApplicationDbContext;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudPaper>
+                        <MudTextField @bind-Value="Estado.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        @if (Estado.Id != null && Estado.Id != 0)
+        {
+            <MudButton Color="Color.Error" OnClick="Eliminar">Eliminar</MudButton>
+        }
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Estado Estado { get; set; }
+    [Parameter] public string ID { get; set; }
+
+
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (ID != null)
+        {
+            Estado = _ApplicationDbContext.Estados.FirstOrDefault(u => u.Id == Int64.Parse(ID));
+        }
+        else
+        {
+            Estado = new Estado();
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Estado).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(ID))
+                {
+                    _ApplicationDbContext.Estados.Update(Estado);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(Estado.Nombre))
+                    {
+                        _ApplicationDbContext.Estados.Add(Estado);
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del estado es obligatorio");
+                        return;
+                    }
+                }
+
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<Estado>(Estado));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    private async void Eliminar()
+    {
+        var result = await DialogService.ShowMessageBox("Eliminar estado", "¿Seguro que quieres eliminar este estado?", "Si", "No");
+
+        if (result is true)
+        {
+            _ApplicationDbContext.Estados.Remove(Estado);
+            await _ApplicationDbContext.SaveChangesAsync();
+            MudDialog.Close(DialogResult.Ok<Estado>(new Estado()));
+        }
+    }
+}
+*@

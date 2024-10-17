@@ -1,0 +1,115 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+<style>
+    .color {
+        background-color: @Estado.Color;
+        height: 20px;
+        width: 20px;
+        border:1px solid #ccc;
+        display: inline-block;
+    }
+</style>
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Estado.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" />
+                    <MudColorPicker Label="Color" @bind-Text="Estado.Color" Required="true" RequiredError="Debe indicar color" />
+                    <br />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    //Variables y Parametros
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Estado Estado { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        //Comprobamos si Cliente es nulo Si es nula, se crea una nueva instancia
+        if (Estado == null)
+        {
+            Estado = new Estado();
+           
+        }
+
+        if (Estado.Id != 0 && Estado.Id != null)
+        {
+            //Cargamos con los datos que corresponde a la id
+            Estado = _ApplicationDbContext.Estados.FirstOrDefault(u => u.Id == Estado.Id);
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Estado).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (Estado.Id != 0 && Estado.Id != null)
+                {
+                    //Editar Estado
+                    _ApplicationDbContext.Estados.Update(Estado);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(Estado.Nombre))
+                    {
+                        //Añadir nuevo Estado
+                        _ApplicationDbContext.Estados.Add(Estado);
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del Estado es obligatorio");
+                        return;
+                    }
+                }
+                // Guarda los cambios en la base de datos.
+                _ApplicationDbContext.SaveChanges();
+                //Cerrar el Dialog
+                MudDialog.Close(DialogResult.Ok<Estado>(Estado));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+}

@@ -1,0 +1,108 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using Color = MudBlazor.Color
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<CPMUser> _UserManager
+@inject AuthenticationStateProvider _auth
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="equipo.Nombre" Label="Nombre del equipo" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar un nombre para el equipo" />
+                </MudItem>
+                <MudItem xs="12" />
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Crear</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Equipo equipo { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+    [Parameter] public EquiposProyecto equiposProyectos { get; set; }
+
+    List<Proyecto> lstProyectos;
+    Equipo existingEquipo = null;
+    bool update = false;
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+    bool success;
+    string[] errors = { };
+    MudForm form;
+    IEnumerable<System.Security.Claims.Claim> userClaims;
+
+    protected override async Task OnInitializedAsync()
+    {
+        base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (equipo == null)
+                {
+                    equipo = new Equipo();
+                }
+                else
+                {
+                    update = true;
+                }
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (update)
+                {
+                    _ApplicationDbContext.Equipos.Update(equipo);
+                }
+                else // Si no tiene ID, se considera una creación
+                {
+                    _ApplicationDbContext.Equipos.Add(equipo);
+                }
+                await _ApplicationDbContext.SaveChangesAsync();
+                MudDialog.Close(DialogResult.Ok<Equipo>(equipo));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(equipo).Reload();
+    }
+}

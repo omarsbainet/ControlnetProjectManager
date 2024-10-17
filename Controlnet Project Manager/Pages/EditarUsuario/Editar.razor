@@ -1,0 +1,144 @@
+﻿@page "/account/manage"
+@using Areas.Identity.Data
+@using Data
+@layout EmptyLayout
+@inject CRUD crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDialogService _dialogService
+@inject UserManager<CPMUser> usermanager
+@inject MyCustomTheme tema;
+@inject ISnackbar snackbar;
+@inject NavigationManager navigationManager
+<style>
+    .color {
+        background-color: @tema.Theme.Palette.Background;
+    }
+
+    .boton {
+        color: white;
+        border-radius: 5px;
+        background-color: @tema.Theme.Palette.Primary;
+        text-align: left;
+    }
+</style>
+
+
+
+<MudPaper Width="85%" Class="d-flex ms-5 color gap-3 align-items-center justify-content-between" Elevation="0">
+    <div class="d-flex flex-column gap-2">
+        <MudText Typo="Typo.h5"><b>Perfil</b></MudText>
+        <MudTextField @bind-Value="nombre" Label="Username" Variant="Variant.Filled" FullWidth="false"></MudTextField>
+        <MudTextField @bind-Value="telefono" Label="Telefono" Variant="Variant.Filled" FullWidth="false"></MudTextField>
+        <MudFileUpload Accept="image/jpeg,image/png,image/webp" T="IBrowserFile" FilesChanged="SubirImagen" Context="imagenInput">
+            <ButtonTemplate>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" Color="Color.Info" HtmlTag="label" for="@imagenInput">Subir imagen</MudButton>
+            </ButtonTemplate>
+        </MudFileUpload>
+        <MudButton Class="boton" FullWidth="true" OnClick="@(()=>ActualizarUsuario())">Guardar cambios</MudButton>
+    </div>
+    <MudAvatar Class="object d-flex " Size="Size.Large" Color="Color.Secondary" Style="color: #009ee0; height: 200px; width: 200px;" Variant="Variant.Filled">
+        <img src="data:image;base64,@fotoPerfil" alt="Foto de perfil" style="width: 100%; height: 100%; object-fit: cover;" />
+    </MudAvatar>
+    
+</MudPaper>
+
+
+
+
+@code {
+    string nombre = "";
+    [Inject] private IDialogService DialogService { get; set; }
+    CPMUser user;
+    string telefono = "";
+    [Inject] AuthenticationStateProvider auth { get; set; }
+    String imagen = "";
+    public string fotoPerfil { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var iduser = usermanager.GetUserId((await auth.GetAuthenticationStateAsync()).User);
+
+        user = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == iduser);
+        nombre = user.UserName;
+        telefono = user.PhoneNumber;
+        if (user.Foto != null)
+        {
+            fotoPerfil = Convert.ToBase64String(user.Foto);
+        }
+        else
+        {
+            fotoPerfil = string.Empty;
+        }
+    }
+    private async Task ActualizarUsuario()
+    {
+
+        if (user != null)
+        {
+            if (user.UserName == nombre && user.PhoneNumber == telefono)
+            {
+                Console.WriteLine("nada cambia");
+            }
+            else
+            {
+                if (user.UserName != nombre)
+                {
+                    await usermanager.SetUserNameAsync(user, nombre);
+                }
+                if (user.PhoneNumber != telefono)
+                {
+                    await usermanager.SetPhoneNumberAsync(user, telefono);
+                }
+                _ApplicationDbContext.SaveChanges();
+            }
+
+
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", $"No se pudo actualizar el usuario {user.UserName}");
+            return;
+        }
+    }
+
+    private async void SubirImagen(IBrowserFile imagenSubida)
+    {
+
+        if (imagenSubida != null)
+        {
+            var memoryStream = new MemoryStream(10000000);
+
+            try
+            {
+                await imagenSubida.OpenReadStream().CopyToAsync(memoryStream);
+
+                if (imagenSubida.Size > 10000000)
+                {
+                    snackbar.Add("El peso máximo es de 10MB", Severity.Error);
+                } else
+                {
+                    var imagenBytes = memoryStream.ToArray();
+
+                    fotoPerfil = Convert.ToBase64String(imagenBytes);
+
+                    user.Foto = imagenBytes;
+
+                    snackbar.Add("Se ha subido la imagen correctamente", Severity.Success);
+
+                    await _ApplicationDbContext.SaveChangesAsync();
+
+                    Thread.Sleep((int)TimeSpan.FromSeconds(0.5).TotalMilliseconds);
+
+                    navigationManager.NavigateTo(navigationManager.Uri, forceLoad: true);
+                }
+                    
+                } catch (Exception ex)
+                {
+                    snackbar.Add("El peso máximo es de 10MB", Severity.Error);
+                }
+
+
+                
+            }
+        }
+    }

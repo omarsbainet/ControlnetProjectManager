@@ -1,0 +1,439 @@
+﻿@page "/Usuarios"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Shared
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using Areas.Identity.Data
+@using System.Reflection;
+@using System.ComponentModel;
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager _navigationManager
+@inject CRUD Crud
+
+
+
+@* <MudButton @onclick="NewUserDialog" Variant="Variant.Filled" Color="Color.Primary">
+    Nuevo usuario
+</MudButton> *@
+@*
+<MudButton @onclick="downloadplantilla" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Custom.FileFormats.FileExcel">
+    Descargar plantilla usuario
+</MudButton>*@
+@*
+<MudButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Custom.FileFormats.FileExcel" for="fileUpdate">Actualizar usuarios</MudButton>
+*@
+@*
+<MudButton HtmlTag="label"
+           Variant="Variant.Filled"
+           Color="Color.Primary"
+           StartIcon="@Icons.Custom.FileFormats.FileExcel"
+           for="fileInput">
+    Importar usuarios
+</MudButton>*@
+@*
+<InputFile id="fileInput" OnChange="uploadplantilla" hidden multiple/>
+<InputFile id="fileUpdate" OnChange="updatePlantilla" hidden multiple></InputFile>
+
+        <MudIconButton Icon="@Icons.Custom.FileFormats.FileExcel" OnClick="@((e) => {exportaexcel(e);})" Title="Exportar Excel" Color="Color.Success"></MudIconButton>
+*@
+
+@{
+        List<Button> botones = new List<Button>()
+        {
+            new ActionButton { Text = "Nuevo usuario", OnClick = NewUserDialog, Icon = @Icons.Material.Filled.Add }
+        };
+}
+@if (!Cargando)
+{
+    
+
+@if (menuRol != null)
+{
+    @if (menuRol.Crear)
+    {
+        <ToolBar Title="USUARIOS" ButtonsLeft="botones"></ToolBar>
+    }
+    else
+    {
+        <ToolBar Title="USUARIOS"></ToolBar>
+    }
+
+    <br/><br/>
+
+    <MudDataGrid @ref="@_grid" T="CPMUser" Items="@FiltrarUsuarios()"
+    Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true"
+             Hideable="true" RowClick="@((x)=>EditUserDialog(x.Item))" CurrentPage="@_selectedPage" RowsPerPage="15">
+        <ToolBarContent>
+            @*
+        @if (navegacionUsuarios.Count != 1)
+        {
+            <MudTooltip Text="Inicio">
+                <MudIconButton Size="@Size.Small" Icon="@Icons.Outlined.KeyboardDoubleArrowLeft" OnClick="@((e) => { limpiarNavegacion();cargarUsuarios();})"/>
+            </MudTooltip>
+
+            <MudTooltip Text="Volver atrás">
+                <MudIconButton Size="@Size.Small" Icon="@Icons.Outlined.ArrowBack" OnClick="@((e) => { volverAtras();cargarUsuarios();})"/>
+            </MudTooltip>
+        }
+
+        <MudText Typo="Typo.h6">@(( navegacionUsuarios.Count == 1) ? "Usuarios" : $"Usuarios a cargo de {navegacionUsuarios.Peek().NombreCompleto}")</MudText>*@
+            <MudText Typo="Typo.h6">Usuarios</MudText>
+
+            <MudSpacer/>
+            <MudSelect T="bool" Label="Estado" Value="@activados" ValueChanged="b => { activados = b; cargarUsuarios();}" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem T="bool" Value=@true>Activados</MudSelectItem>
+                <MudSelectItem T="bool" Value=@false>Desactivados</MudSelectItem>
+            </MudSelect>
+            <MudSpacer></MudSpacer>
+            <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense"
+            Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+            AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+            </MudTextField>
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.UserName" Title="Usuario"/>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.Nombre" Title="Nombre"/>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.Rol== null? null : x.Rol.Name" Title="Rol"/>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.Email" Title="Email"/>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.Superior==null? null : x.Superior.Nombre" Title="Superior"/>
+            <PropertyColumn T="CPMUser" TProperty="string" Property="x=> x.UsuarioGitHub" Title="Usuario Github"/>
+            @if (menuRol != null && menuRol.Editar)
+            {
+                <TemplateColumn Sortable="false">
+                    <CellTemplate >
+                    @*Editar Cliente*@
+                    <MudTooltip Text="Editar Usuario">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EditUserDialog(context.Item); })" />
+                    </MudTooltip>
+                    @*
+                <MudTooltip Text="Ausencias">
+                    <MudIconButton Size="@Size.Small" Icon="@Icons.Outlined.PersonOutline" OnClick="@((e) => { AusenciasDialog(context.Item); })"/>
+                </MudTooltip>*@
+                    @*
+                <MudTooltip Text="Añadir menu">
+                    <MudIconButton Size="@Size.Small" Icon="@Icons.Outlined.Settings" OnClick="@((e) => { MenuDialog(context.Item); })"/>
+                </MudTooltip>
+                *@  
+                    @*
+                @if (context.Item.esSuperior)
+                {
+                    <MudTooltip Text="Ver usuarios asignados">
+                        <MudIconButton Size="Size.Small" Icon="@Icons.Outlined.ArrowForward" OnClick="@((e) => { VerUsuarios(context.Item); })"/>
+                    </MudTooltip>
+                }*@
+                </CellTemplate>
+            </TemplateColumn>
+            }
+
+        </Columns>
+        <PagerContent >
+            <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4"/>
+        </PagerContent>
+    </MudDataGrid>
+
+
+    <MudDialog @bind-IsVisible="@_uploadInProgress">
+        <DialogContent>
+            <MudText Typo="Typo.h6" Align="Align.Center">Cargando usuarios...</MudText>
+            <br/>
+            <MudProgressLinear Value="@progress" Striped="true" Size="Size.Medium" Buffer="true" BufferValue="@progressBuffer"/>
+            <br/>
+            <MudText Align="Align.Center">@progressText</MudText>
+        </DialogContent>
+    </MudDialog>
+}
+else if (menuRol == null)
+{
+    <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+}
+}
+else{
+<ToolBar Title="USUARIOS"></ToolBar>
+<br />
+<div style="display:flex; align-items:center; justify-content:center">
+    <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+</div>
+}
+
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    public CPMUser usuario { get; set; }
+    Stack<CPMUser> navegacionUsuarios = new Stack<CPMUser>();
+    public bool activados = true;
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    string _searchString = "";
+    int idEmpresa;
+    List<CPMUser> lstUsuarios = new List<CPMUser>();
+    string idUsuario;
+    string CalPopupTitulo;
+    bool PopupVisible { get; set; } = false;
+    private MudDataGrid<CPMUser> _grid;
+    private int _selectedPage;
+    private MenuRol menuRol = null;
+    private string url = "";
+    private int idMenu = 0;
+    private bool allowCreate = false;
+    private bool allowEdit = false;
+    private bool allowDelete = false;
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    private List<CPMUser> FiltrarUsuarios()
+    {
+        return lstUsuarios.FindAll(it =>
+            (it.UserName != null && it.UserName.ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.Nombre != null && it.Nombre.ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.Rol != null && it.Rol.Name.ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.Superior != null && it.Superior.Nombre.ToUpper().Contains(_searchString.ToUpper())) ||
+            (it.Email != null && it.Email.ToUpper().Contains(_searchString.ToUpper())));
+    }
+
+    void cargarUsuarios()
+    {
+        //lstUsuarios = _ApplicationDbContext.Users.Where(it => it.Rol.Orden > usuario.Rol.Orden && it.Activo).ToList();
+        lstUsuarios = _ApplicationDbContext.Users.Include(it=> it.Rol).Where(it => it.Activo == activados).ToList();
+
+    }
+
+    void limpiarNavegacion(){
+        navegacionUsuarios.Clear();
+        navegacionUsuarios.Push(usuario);
+        StateHasChanged();
+    }
+
+    void volverAtras()
+    {
+        navegacionUsuarios.Pop();
+        StateHasChanged();
+    }
+
+    void VerUsuarios(CPMUser usr)
+    {
+        navegacionUsuarios.Push(_ApplicationDbContext.Users.FirstOrDefault(u => u.Id == usr.Id));
+        cargarUsuarios();
+        StateHasChanged();
+    }
+
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        //idEmpresa = int.Parse(userClaims.FirstOrDefault(c => c.Type == "idEmpresa").Value);
+
+        //var idus = (await _UserManager.GetUserAsync(_httpContextAccessor.HttpContext.User)).Id;
+        //await Task.Delay(1);
+        //usuario = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == idus);
+        await base.OnInitializedAsync();
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            navegacionUsuarios.Push(usuario);
+            cargarUsuarios();
+            _selectedPage = 0;
+
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            Cargando = false;
+            StateHasChanged();
+        }
+
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async void MenuDialog(CPMUser usr)
+    {
+
+    }
+
+    /*
+    private async void AusenciasDialog(clsUsuario usr)
+        {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium, DisableBackdropClick = true, CloseButton = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("ID", usr.id);
+
+        var dialog = await _dialogService.Show<Ausencias>("Ausencias", parameters, options).Result;
+        if (dialog.Data != null)
+            {
+            cargarUsuarios();
+            StateHasChanged();
+    }
+    }*/
+
+    private async void EditUserDialog(CPMUser usr)
+    {
+        if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+            var parameters = new DialogParameters();
+            parameters.Add("usuario", usr);
+            parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+            parameters.Add("layout", Layout);
+
+            var dialog = await _dialogService.Show<NewUsuario>("Editar usuario", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                cargarUsuarios();
+                StateHasChanged();
+            }
+            await Layout.RecargaMainLayout();
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        }
+    }
+
+    private async void NewUserDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+        parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<NewUsuario>("Nuevo usuario",parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            cargarUsuarios();
+            StateHasChanged();
+        }
+        await Layout.RecargaMainLayout();
+        
+    }
+
+    private Stream GetFileStream()
+    {
+        var path = Path.GetFullPath("wwwroot\\Plantillas\\usuario.xlsx");
+        return File.OpenRead(path);
+    }
+
+    private void downloadplantilla()
+    {
+        /*var filestream = GetFileStream();
+        Exportar exp = new Exportar();
+        exp.generarExcel(_jSRuntime, filestream, "usuario.xlsx");*/
+    }
+
+    
+    private void enviarEmail(string email, string subject, string body)
+    {
+        if (email != "")
+        {
+            try
+            {
+                var fromAddress = new MailAddress("info@controlnet.es");
+                var toAddress = new MailAddress(email);
+
+                var smtp = new SmtpClient
+                {
+                    Host = "smtp-relay.sendinblue.com",
+                    Port = 587,
+                    EnableSsl = true,
+                    DeliveryMethod = SmtpDeliveryMethod.Network,
+                    UseDefaultCredentials = false,
+                    Credentials = new NetworkCredential("toni@controlnet.es", "A2m7dQTDHIbz1f5p")
+                };
+                using (var message = new MailMessage(fromAddress, toAddress)
+                {
+                    IsBodyHtml = true,
+                    Subject = subject,
+                    Body = body
+                })
+                {
+                    smtp.Send(message);
+                }
+            }
+            catch(Exception e)
+            {
+                    
+            }
+        }
+    }
+
+    class clsExportUsuario
+    {
+      
+        public string Usuario { get; set; }
+        public string Nombre { get; set; }
+        public string DNI { get; set; }            
+        public string Rol { get; set; }
+        public string Poblacion { get; set; }
+        public string Zonal { get; set; }
+        public string Email { get; set; }
+        public string Telefono { get; set; }
+        public string Region { get; set; }
+        public string Genero { get; set; }
+        public string Superior { get; set; }
+        public string Direccion { get; set; }
+        public string Pais { get; set; }
+        public string CodigoPostal { get; set; }
+        public string ZonaHoraria { get; set; }
+    }
+
+}

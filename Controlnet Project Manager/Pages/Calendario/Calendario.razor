@@ -1,0 +1,711 @@
+﻿@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor.Extensions
+@using Controlnet_Project_Manager.Pages.Incidencia
+@using Controlnet_Project_Manager.Pages.Desarrollo
+@using Controlnet_Project_Manager.Pages.VistaTrabajo
+
+@attribute [Authorize]
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDialogService _dialogService
+@inject CRUD Crud
+@inject MyCustomTheme tema
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@* <div style="display: flex; justify-content: space-between; gap: 20px;">
+    <MudPaper Class="pa-5" Style="width: 100%; margin-top: 20px;">
+        <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+            <MudText Style="font-size: 1.5em;"><strong>Calendario</strong></MudText>
+        </div>
+        <div class="select-programador" style="flex: 1; display: flex; align-items: center;">
+            <div style="flex: 1; max-width: 350px;">
+                <!-- Ajusta el ancho máximo según tu preferencia -->
+                <MudSelect Label="Selecciona un programador" Value="programadoresProyecto" Clearable="true" T="ProgramadoresProyecto" ValueChanged="@(async (ProgramadoresProyecto p) => await ActualizarEventos(p))" Style="margin-right: 10px;">
+                    @foreach (var programador in lstProgramadores)
+                    {
+                        <MudSelectItem Value="@programador">@programador.Programador.Nombre</MudSelectItem>
+                    }
+                </MudSelect>
+            </div>
+            <MudChip Size="Size.Large" Color="Color.Secondary" Style="color: #009ee0;" OnClick="@OpenDialog">
+                <!-- Ajusta el ancho máximo según tu preferencia -->
+                <div style="max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin-left: 10px;">
+                    @labelFecha
+                </div>
+                <div style="margin-left: 10px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" />
+                </div>
+            </MudChip>
+
+        </div>
+    </MudPaper>
+</div> *@
+
+
+
+<div>
+    <div class="contenedorFiltros">
+        <MudPaper Style="width:275px;" Class="d-flex flex-column ms-5 color gap-3" Elevation="0" >
+            <MudSelect Variant="Variant.Outlined" Style="@(Layout.esModoNocturno() ? $"width: 250px; background-color: {tema.Theme.PaletteDark.Primary}; margin-top: 15px;width: 275px;border-radius:5px;" : $"width: 250px; background-color: {tema.Theme.Palette.Primary}; margin-top: 15px;width: 275px;border-radius:5px;")" Label="Selecciona un programador" Value="programadoresProyecto" Clearable="true" T="ProgramadoresProyecto" ValueChanged="@(async (ProgramadoresProyecto p) => await ActualizarEventos(p))">
+            @foreach (var programador in lstProgramadores)
+            {
+                <MudSelectItem Value="@programador">@programador.Programador.Nombre</MudSelectItem>
+            }
+        </MudSelect>
+        </MudPaper>
+
+        <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ?$"margin-top:24px;background-color: {tema.Theme.PaletteDark.Primary}; color: white; border-radius: 5px; width: auto;height:38px": $"margin-top:24px;background-color: {tema.Theme.Palette.Primary}; color: white; border-radius: 5px; width: auto;height:38px")" OnClick="@OpenDialog">
+            <!-- Ajusta el ancho máximo según tu preferencia -->
+            <div style="max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                @labelFecha  
+            </div>
+            <div>
+                <MudIcon Icon="@Icons.Material.Filled.Event" />
+            </div>
+        </MudChip>
+    </div>
+
+    <MudCalendar Items="eventos" EnableDragItems="@DragItems" ItemChanged="HandleItemChanged" ItemClicked="InfoItemClickedDialog">
+        <CellTemplate>
+            @{
+                var item = context as CustomItemCalendar;
+                <div class="celda" style="display: flex;">
+                    <div style="width: 7px; background-color: @item.ColorEstado">
+                    </div>
+                    <div style="@(Layout.esModoNocturno() ? $"flex-grow: 1; overflow: auto;background-color:{tema.Theme.PaletteDark.Primary.ToString()}" : "flex-grow: 1; overflow: auto;")">
+                        <div style="display: flex;  padding-left:10px; margin-top:3px;">
+                            <MudIcon Icon="@item.Icono" Size="Size.Small" Style="margin-right: 10px" />
+                            <MudText Typo="Typo.body1" Align="Align.Center" Style="font-size: 15px">@item.Title</MudText>
+                        </div>
+                        <div class="@(Layout.esModoNocturno() ? "linea-dark" : "linea")"></div>
+                        <div style="padding-left:10px;">
+                            <MudText Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="descripcion-fecha" Typo="Typo.body2">@item.DescripcionFecha</MudText>
+                            <MudText Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Typo="Typo.body2">@item.Text</MudText>
+                        </div>
+                    </div>
+                </div>
+            }
+        </CellTemplate>
+    </MudCalendar>
+
+</div>
+
+
+<style>
+    svg.mud-icon-root.mud-icon-default.mud-svg-icon.mud-icon-size-medium {
+        color: white;
+    }
+    .mud-shrink ~ label.mud-input-label.mud-input-label-inputcontrol.mud-input-label-outlined, .mud-input:focus-within ~ label.mud-input-label.mud-input-label-inputcontrol.mud-input-label-outlined {
+        transform: translate(14px,-6px) scale(.75);
+        color: transparent;
+        background-color: transparent;
+    }
+
+    .mud-input-control > .mud-input-control-input-container > .mud-input-label-outlined.mud-input-label-inputcontrol {
+        line-height: 11px;
+    }
+
+    .mud-input.mud-input-outlined.mud-input-adorned-end {
+        padding-right: 14px;
+        padding-inline-end: 14px;
+        padding-inline-start: unset;
+        height: 68%;
+    }
+    .mud-icon-button-size-small.mud-icon-button-edge-end {
+        margin-right: -3px;
+        margin-inline-end: -3px;
+        margin-inline-start: unset;
+        color: white;
+    }
+
+    .mud-input-control > .mud-input-control-input-container > .mud-input-label-inputcontrol {
+        color: #fff;
+        padding: 0;
+        font-size: 1rem;
+        font-weight: 400;
+        line-height: 1;
+        letter-spacing: .00938em;
+        z-index: 0;
+        pointer-events: none;
+        background-color: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Primary}" : $"{tema.Theme.Palette.Primary}");
+        margin-top: -7px;
+    }
+    .mud-input > input.mud-input-root-outlined.mud-input-root-adorned-end, div.mud-input-slot.mud-input-root-outlined.mud-input-root-adorned-end {
+        padding-right: 0;
+        padding-inline-end: 0;
+        padding-inline-start: 14px;
+        color: white;
+    }
+    .mud-input > input.mud-input-root.mud-input-root-filled.mud-input-root-adorned-end, div.mud-input-slot.mud-input-root.mud-input-root-filled.mud-input-root-adorned-end {
+        padding-right: 0;
+        padding-inline-end: 0;
+        padding-inline-start: 12px;
+        background-color: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Primary}" : $"{tema.Theme.Palette.Primary}");
+        border-radius: 5px;
+        color: white;
+    }
+
+    .mud-input.mud-input-filled.mud-input-adorned-end {
+        padding-right: 12px;
+        padding-inline-end: 12px;
+        padding-inline-start: unset;
+        background-color: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Primary}" : $"{tema.Theme.Palette.Primary}");
+        border-radius: 5px;
+    }
+
+    .mud-input-control > .mud-input-control-input-container {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .mud-input-control {
+        border: 0;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex: 1 1 auto;
+        max-width: 100%;
+        position: relative;
+        flex-direction: column;
+        vertical-align: top;
+        margin-top: 6px;
+        height: 52%;
+    }
+    .celda {
+        border-radius: 5px;
+        width: 100%;
+        height: 100%;
+        border: 1px solid;
+        margin-bottom: 7px;
+    }
+
+    .descripcion-fecha {
+        font-weight: bold;
+        font-size: 15px;
+    }
+
+    .linea {
+        border-top: 1px solid #000;
+        width: 100%;
+    }
+    .linea-dark{
+        border-top: 1px solid #fff;
+        width: 100%;
+    }
+
+    .mud-calendar {
+        min-height: 880px !important;
+    }
+
+    .mud-select {
+        display: flex;
+        flex-grow: 1;
+        position: relative;
+        margin-top: 9px;
+    }
+    .contenedorFiltros{
+        display: flex;
+        position: absolute;
+        margin-left: 250px;
+    }
+
+</style>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    [Parameter]
+    public string ProyectoSelect { get; set; }
+    [Parameter]
+    public string id { get; set; }
+    [Parameter]
+    public Proyecto proyecto { get; set; }
+
+    private CPMUser Usuario { get; set; }
+
+    private MenuRol menuRol = null;
+    private bool DragItems = false;
+
+    private List<Incidencia> ListaIncidencias = new List<Incidencia>();
+    private List<Desarrollo> ListaDesarrollos = new List<Desarrollo>();
+    private List<CustomItemCalendar> eventos = new List<CustomItemCalendar>();
+
+    private List<Incidencia> incidenciasPorFecha = new List<Incidencia>();
+    private List<Desarrollo> desarrolloPorFecha = new List<Desarrollo>();
+
+    private const int MaxCaracteresBloque = 22;
+
+    private const string ColIncidencia = "#D50000";//#F44336
+    private const string ColDesarrollo = "#4CAF50";
+
+    private const string TipoFechaCreacionInc = "CREACIONINC";
+    private const string TipoFechaCerrada = "CERRADA";
+    private const string TipoFechaCreacionDes = "CREACIONDES";
+    private const string TipoDesaFechaEntrega = "ENTREGA";
+    private const string TipoFechaFinalizacion = "FINALIZACION";
+
+
+    private List<ProgramadoresProyecto> lstProgramadores = new List<ProgramadoresProyecto>();
+    public ProgramadoresProyecto programadoresProyecto { get; set; }
+    private List<EquiposProyecto> lstEquipos = new List<EquiposProyecto>();
+
+    private DateTime? startDateTime;
+    private DateTime? endDateTime;
+    public bool isDateSet = false;
+    private string labelFecha = "Seleccionar Fecha";
+
+    private async void OpenDialog()
+    {
+        var parameters = new DialogParameters();
+        parameters.Add("dateRange", new DateRange() { Start = startDateTime, End = endDateTime });
+        var options = new DialogOptions { CloseOnEscapeKey = true, CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var result = await _dialogService.Show<DateRangePickerDialog>("", parameters, options).Result;
+
+        if (!result.Canceled)
+        {
+            var dates = (DateRange)result.Data; // puede ser null ; DateTime?
+            startDateTime = dates.Start;
+
+            if (dates.End.HasValue)
+            {
+                endDateTime = dates.End.Value.AddHours(23).AddMinutes(59).AddSeconds(59); // que recoja el dia entero
+            }
+            isDateSet = startDateTime.HasValue && endDateTime.HasValue;
+            await CargarIncidenciasProyecto(proyecto, startDateTime, endDateTime);
+            await CargarDesarrolloProyecto(proyecto,startDateTime,endDateTime);
+            cargarLabelSelector(isDateSet);
+            await ActualizarEventos();
+            await InvokeAsync(StateHasChanged);
+        }
+        StateHasChanged();
+    }
+
+
+    private void cargarLabelSelector(bool isDateSet)
+    {
+        if (isDateSet)
+        {
+            labelFecha = startDateTime.Value.ToString("dd-MM-yyyy") + " ➤ " + endDateTime.Value.ToString("dd-MM-yyyy");
+        }
+        else
+        {
+            labelFecha = "Seleccionar Fecha";
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                Usuario = Layout.usuario;
+
+                proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                menuRol = await Crud.GetMenuRol((int)MenuEnum.Calendario, Usuario);
+
+                if (menuRol.Editar)
+                {
+                    DragItems = true;
+                }
+
+                await CargarIncidenciasProyecto(proyecto);
+                await CargarDesarrolloProyecto(proyecto);
+
+                await CargarProgramadoresPorProyecto(proyecto);
+                // Filtrar eventos por el programador seleccionado
+                AddListaIncidencias();
+                AddListaDesarrollo();
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+
+    private async Task CargarProgramadoresPorProyecto(Proyecto pro)
+    {
+        try
+        {
+            lstProgramadores = await _ApplicationDbContext.ProgramadoresProyectos.Include(it => it.Programador).Where(programador => programador.Proyecto.Id == pro.Id).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar programadores por proyecto desde la base de datos: {ex.Message}");
+        }
+    }
+
+    //Guarda en una lista las incidencias obtenidas de la BD
+    private async Task CargarIncidenciasProyecto(Proyecto pro, DateTime? fechaInicio = null, DateTime? FechaFin = null)
+    {
+        try
+        {
+            if (fechaInicio.HasValue && FechaFin.HasValue)
+            {
+                if (isDateSet)
+                {
+                  ListaIncidencias = await _ApplicationDbContext.Incidencias
+                .Where(incidencia => incidencia.Proyecto.Id == pro.Id && incidencia.FechaCreacion >= fechaInicio && incidencia.FechaCreacion <= FechaFin).ToListAsync();
+                }
+            }
+            else
+            {
+                ListaIncidencias = await _ApplicationDbContext.Incidencias
+                .Where(incidencia => incidencia.Proyecto.Id == pro.Id).ToListAsync();
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarIncidenciasProyecto(pro);
+        }
+    }
+
+
+    //Guarda en una lista los desarrollos obtenidos de la BD
+    private async Task CargarDesarrolloProyecto(Proyecto pro, DateTime? fechaInicio = null, DateTime? FechaFin = null)
+    {
+        try
+        {
+            if(fechaInicio.HasValue && FechaFin.HasValue)
+            {
+                if (isDateSet)
+                {
+                    ListaDesarrollos = await _ApplicationDbContext.Desarrollos
+                .Where(desarrollo => desarrollo.Proyecto.Id == pro.Id && desarrollo.FechaCreacion >= fechaInicio && desarrollo.FechaCreacion <= FechaFin).ToListAsync();
+                }
+            }
+            else
+            {
+                ListaDesarrollos = await _ApplicationDbContext.Desarrollos
+                .Where(it => it.Proyecto.Id == pro.Id).ToListAsync();
+
+            }
+            StateHasChanged();
+
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarDesarrolloProyecto(pro);
+        }
+    }
+
+    //Añade al evento del calendario las incidencias de la lista de incidencias
+    private void AddListaIncidencias()
+    {
+        foreach (var incidencia in ListaIncidencias)
+        {
+            // Si no hay ningún programador seleccionado o la incidencia pertenece al programador seleccionado
+            if (programadoresProyecto == null || incidencia.UsuarioAsignado == programadoresProyecto.Programador)
+            {
+                if (incidencia.FechaCreacion != null)
+                {
+                    AddItemIncidencia(incidencia, incidencia.FechaCreacion, TipoFechaCreacionInc);
+                }
+
+                if (incidencia.FechaCerrada != null)
+                {
+                    AddItemIncidencia(incidencia, incidencia.FechaCerrada.Value, TipoFechaCerrada);
+                }
+            }
+        }
+    }
+
+    //Añade al evento del calendario los desarrollos de la lista de desarrollos por fechas
+    private void AddListaDesarrollo()
+    {
+        foreach (var desarrollo in ListaDesarrollos)
+        {
+            // Si no hay ningún programador seleccionado o el desarrollo pertenece al programador seleccionado
+            if (programadoresProyecto == null || desarrollo.UsuarioAsignado == programadoresProyecto.Programador)
+            {
+                if (desarrollo.FechaCreacion != null)
+                {
+                    AddItemDesarrollo(desarrollo, desarrollo.FechaCreacion, TipoFechaCreacionDes);
+                }
+
+                if (desarrollo.FechaEntrega != null)
+                {
+                    AddItemDesarrollo(desarrollo, desarrollo.FechaEntrega, TipoDesaFechaEntrega);
+                }
+
+                if (desarrollo.FechaFinalizacion != null)
+                {
+                    AddItemDesarrollo(desarrollo, desarrollo.FechaFinalizacion.Value, TipoFechaFinalizacion);
+                }
+            }
+        }
+    }
+
+
+    //Añade un incidencia al evento del calendario segun la fecha
+    private void AddItemIncidencia(Incidencia incidencia, DateTime fecha, string tipoFecha)
+    {
+        string descripcionFecha = GetDescripcionFecha(tipoFecha);
+
+        CustomItemCalendar item;
+
+        try
+        {
+            if (incidencia.EstadoIncidencia != null)
+            {
+                item = new()
+                    {
+                        Id = incidencia.Id,
+                        Start = fecha,
+                        Title = incidencia.EstadoIncidencia.Nombre,
+                        Text = incidencia.Nombre,
+                        ColorEstado = incidencia.EstadoIncidencia.Color,
+                        Color = ColIncidencia,
+                        TipoFecha = tipoFecha,
+                        DescripcionFecha = descripcionFecha,
+                        Icono = @Icons.Material.Filled.BugReport
+                    };
+
+                item.Text = maxCaracteresNombre(item.Text);
+
+                eventos.Add(item);
+            }
+
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Error: " + e);
+        }
+
+    }
+
+
+    //Añade un desarrollo al evento del calendario segun la fecha
+    private void AddItemDesarrollo(Desarrollo desarrollo, DateTime fecha, string tipoFecha)
+    {
+        string descripcionFecha = GetDescripcionFecha(tipoFecha);
+
+        CustomItemCalendar item;
+
+        try
+        {
+            if (desarrollo.EstadoDesarrollo != null)
+            {
+                item = new()
+                    {
+                        Id = desarrollo.Id,
+                        Start = fecha,
+                        Title = desarrollo.EstadoDesarrollo.Nombre,
+                        Text = desarrollo.Nombre,
+                        ColorEstado = desarrollo.EstadoDesarrollo.Color,
+                        Color = ColDesarrollo,
+                        TipoFecha = tipoFecha,
+                        DescripcionFecha = descripcionFecha,
+                        Icono = @Icons.Material.Filled.Build
+                    };
+
+                item.Text = maxCaracteresNombre(item.Text);
+
+                eventos.Add(item);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine("Error: " + e);
+        }
+
+    }
+
+
+    //Establece la descripcion de la fecha segun el tipo que se le pasa por parametro
+    private string GetDescripcionFecha(string tipoFecha)
+    {
+        string descripcionFecha = "";
+        switch (tipoFecha)
+        {
+            case TipoFechaCreacionInc:
+                descripcionFecha = "Creación";
+                break;
+            case TipoFechaCreacionDes:
+                descripcionFecha = "Creación";
+                break;
+            case TipoFechaCerrada:
+                descripcionFecha = "Cerrada";
+                break;
+            case TipoDesaFechaEntrega:
+                descripcionFecha = "Entrega";
+                break;
+            case TipoFechaFinalizacion:
+                descripcionFecha = "Finalización";
+                break;
+            default:
+                break;
+        }
+        return descripcionFecha;
+    }
+
+    //Comprueba que el texto pasado por parametro no supere los caracteres especificados en la constante MaxCaracteresBloque
+    private string maxCaracteresNombre(string texto)
+    {
+        if (texto.Length > MaxCaracteresBloque)
+        {
+            texto = texto.Substring(0, MaxCaracteresBloque) + "...";
+        }
+
+        return texto;
+    }
+
+    //Mostrar en un Dialog los datos de la incidencia o desarrollo cliqueado
+    private async void InfoItemClickedDialog(CalendarItem item)
+    {
+        CustomItemCalendar customItem = (CustomItemCalendar)item;
+
+        bool esIncidencia = false;
+
+        if (EsIncidencia(customItem))
+        {
+            esIncidencia = true;
+        }
+
+        if (esIncidencia)
+        {
+            Incidencia inc = GetIncidencia(customItem);
+            var parameters = new DialogParameters();
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+            parameters.Add("Incidencia", inc);
+            var dialog = await _dialogService.Show<InfoIncidencia>("Ver Informacion de la Incidencia", parameters, options).Result;
+        }
+        else
+        {
+            Desarrollo des = GetDesarrollo(customItem);
+            var parameters = new DialogParameters();
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+            parameters.Add("Desarrollo", des);
+            var dialog = await _dialogService.Show<InfoDesarrollo>("Ver Informacion del Desarrollo", parameters, options).Result;
+        }
+
+    }
+
+    //Obtener la incidencia a partir de un CustomItemCalendar
+    private Incidencia GetIncidencia(CustomItemCalendar customItem)
+    {
+        foreach (var incidencia in ListaIncidencias)
+        {
+            if (customItem.Id == incidencia.Id)
+            {
+                return incidencia;
+            }
+        }
+        return null;
+    }
+
+    //Obtener el desarrollo a partir de un CustomItemCalendar
+    private Desarrollo GetDesarrollo(CustomItemCalendar customItem)
+    {
+        foreach (var desarrollo in ListaDesarrollos)
+        {
+            if (customItem.Id == desarrollo.Id)
+            {
+                return desarrollo;
+            }
+        }
+        return null;
+    }
+
+    //ACTUALIZAR EVENTOS AL CAMBIAR DE PROGRAMADOR
+    private async Task ActualizarEventos(ProgramadoresProyecto seleccion=null)
+    {
+        programadoresProyecto = seleccion; // Asegúrate de actualizar la propiedad
+
+        // Limpiar la lista de eventos
+        eventos.Clear();
+
+        // Añadir los elementos al calendario de nuevo
+        AddListaIncidencias();
+        AddListaDesarrollo();
+
+        // Forzar la actualización de la interfaz de usuario
+        StateHasChanged();
+    }
+
+    //Cambiar la fecha antigua del item arrastrado a la nueva fecha de la nueva celda del calendario
+    private void HandleItemChanged(CalendarItem item)
+    {
+        CustomItemCalendar customItem = (CustomItemCalendar)item;
+
+        bool esIncidencia = false;
+        bool esDesarrollo = false;
+
+        bool esFechaCreacion = false;
+        bool esFechaCerrada = false;
+        bool esFechaEntrega = false;
+        bool esFechaFinalizacion = false;
+
+        if (EsIncidencia(customItem))
+        {
+            esIncidencia = true;
+            if (customItem.TipoFecha.Equals(TipoFechaCreacionInc))
+                esFechaCreacion = true;
+            else
+                esFechaCerrada = true;
+        }
+        else
+        {
+            esDesarrollo = true;
+            if (customItem.TipoFecha.Equals(TipoFechaCreacionDes))
+                esFechaCreacion = true;
+            else if (customItem.TipoFecha.Equals(TipoDesaFechaEntrega))
+                esFechaEntrega = true;
+            else
+                esFechaFinalizacion = true;
+        }
+
+        if (esIncidencia)
+        {
+            var itemIncidencia = ListaIncidencias.FirstOrDefault(it => it.Id == customItem.Id);
+            if (itemIncidencia != null)
+            {
+                if (esFechaCreacion)
+                    itemIncidencia.FechaCreacion = customItem.Start;
+                else if (esFechaCerrada)
+                    itemIncidencia.FechaCerrada = customItem.Start;
+            }
+        }
+        else if (esDesarrollo)
+        {
+            var itemDesarrollo = ListaDesarrollos.FirstOrDefault(it => it.Id == customItem.Id);
+            if (itemDesarrollo != null)
+            {
+                if (esFechaCreacion)
+                    itemDesarrollo.FechaCreacion = customItem.Start;
+                else if (esFechaEntrega)
+                    itemDesarrollo.FechaEntrega = customItem.Start;
+                else
+                    itemDesarrollo.FechaFinalizacion = customItem.Start;
+            }
+        }
+        _ApplicationDbContext.SaveChanges();
+    }
+
+    //Comprueba si el CustomItemCalendar pasado por parametro es una incidencia o un desarrollo
+    private bool EsIncidencia(CustomItemCalendar customItem)
+    {
+        if (customItem.TipoFecha.Equals(TipoFechaCreacionInc) || customItem.TipoFecha.Equals(TipoFechaCerrada))
+        {
+            return true;
+        }
+        return false;
+    }
+
+
+}

@@ -1,0 +1,75 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@using System.Reflection;
+@using System.ComponentModel;
+@using static Controlnet_Project_Manager.Pages.Index
+
+@using Controlnet_Project_Manager.Shared.Model
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <MudItem xs="12">
+                <MudPaper>
+                    <MudTextField @bind-Value="razon" Label="Razón del rechazo" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+
+    <DialogActions>
+
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    string razon = "";
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Peticion peticion { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+    }
+
+    protected void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    protected async Task Submit()
+    {
+        if (!string.IsNullOrEmpty(razon))
+        {
+            peticion.Razon = razon;
+            peticion.Aceptado = false;
+            _ApplicationDbContext.Peticiones.Update(peticion);
+
+            MudDialog.Close(DialogResult.Ok<Peticion>(peticion));
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", "Es obligatorio rellenar el nombre de la peticion");
+
+        }
+    }
+}

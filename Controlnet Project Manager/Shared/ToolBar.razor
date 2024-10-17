@@ -1,0 +1,149 @@
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@inject MyCustomTheme tema;
+
+@if (layout.esModoNocturno())
+{
+    <MudToolBar DisableGutters="true" Class="d-flex" Style="@($"z-index: 99;border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;height:50px;width:100%;display: flex; flex-direction: row; justify-content: space-around; background-color: {tema.Theme.PaletteDark.Primary.ToString()}")">
+        <div style="width:100%;display: flex; flex-direction: row; justify-content: space-around">
+
+            @foreach (Button b in ButtonsLeft)
+            {
+                if (b is ExportExcelButton)
+                {
+                    <MudButton HtmlTag="label"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@((b as ExportExcelButton).Icon)"
+                               for="@((b as ExportExcelButton).FileInput)">
+                        @((b as ExportExcelButton).Text)
+                    </MudButton>
+                }
+                else if (b is ActionButton actionButton)
+                {
+                    <MudButton @onclick="@(() => InvokeAsync(actionButton.OnClick))"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@actionButton.Icon">
+                        @actionButton.Text
+                    </MudButton>
+                }
+                else if (b is TaskButton taskButton)
+                {
+                    <MudButton @onclick="@(() => InvokeAsync(taskButton.OnClick))"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@taskButton.Icon">
+                        @taskButton.Text
+                    </MudButton>
+                }
+            }
+
+        </div>
+        <div>
+            <MudText Color="Color.Secondary" Typo="Typo.h6">@Title</MudText>
+        </div>
+        <div style="width:100%;display: flex; flex-direction: row; justify-content: space-around">
+            @foreach (Button b in ButtonsRight)
+            {
+                if (b is ExportExcelButton)
+                {
+                    <MudButton HtmlTag="label"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@((b as ExportExcelButton).Icon)"
+                               for="@((b as ExportExcelButton).FileInput)">
+                        @((b as ExportExcelButton).Text)
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton @onclick="@((b as ActionButton).OnClick)" Variant="Variant.Text" Color="Color.Secondary" StartIcon="@((b as ActionButton).Icon)">
+                        @((b as ActionButton).Text)
+                    </MudButton>
+                }
+            }
+        </div>
+    </MudToolBar>
+}
+else
+{
+    <MudToolBar DisableGutters="true" Class="d-flex" Style="@($"z-index: 99;border-bottom-left-radius: 10px; border-bottom-right-radius: 10px;height:50px;width:100%;display: flex; flex-direction: row; justify-content: space-around; background-color: {tema.Theme.Palette.Primary.ToString()}")">
+        <div style="width:100%;display: flex; flex-direction: row; justify-content: space-around">
+
+            @foreach (Button b in ButtonsLeft)
+            {
+                if (b is ExportExcelButton)
+                {
+                    <MudButton HtmlTag="label"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@((b as ExportExcelButton).Icon)"
+                               for="@((b as ExportExcelButton).FileInput)">
+                        @((b as ExportExcelButton).Text)
+                    </MudButton>
+                }
+                else if (b is ActionButton actionButton)
+                {
+                    <MudButton @onclick="@(() => InvokeAsync(actionButton.OnClick))"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@actionButton.Icon">
+                        @actionButton.Text
+                    </MudButton>
+                }
+                else if (b is TaskButton taskButton)
+                {
+                    <MudButton @onclick="@(() => InvokeAsync(taskButton.OnClick))"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@taskButton.Icon">
+                        @taskButton.Text
+                    </MudButton>
+                }
+            }
+
+        </div>
+        <div>
+            <MudText Color="Color.Secondary" Typo="Typo.h6">@Title</MudText>
+        </div>
+        <div style="width:100%;display: flex; flex-direction: row; justify-content: space-around">
+            @foreach (Button b in ButtonsRight)
+            {
+                if (b is ExportExcelButton)
+                {
+                    <MudButton HtmlTag="label"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@((b as ExportExcelButton).Icon)"
+                               for="@((b as ExportExcelButton).FileInput)">
+                        @((b as ExportExcelButton).Text)
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton @onclick="@((b as ActionButton).OnClick)" Variant="Variant.Text" Color="Color.Secondary" StartIcon="@((b as ActionButton).Icon)">
+                        @((b as ActionButton).Text)
+                    </MudButton>
+                }
+            }
+        </div>
+    </MudToolBar>
+}
+
+    @code {
+
+        [Parameter]
+        public string Title { get; set; } = "";
+
+        [Parameter]
+        public List<Button> ButtonsLeft { get; set; } = new();
+        
+        [Parameter]
+        public List<Button> ButtonsRight { get; set; } = new();
+
+    [CascadingParameter]
+    public MainLayout layout { get; set; }
+
+    }

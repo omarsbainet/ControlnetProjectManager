@@ -1,0 +1,83 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent>
+            <MudSelect T="Estado" Label="Estado" @bind-Value="Proyecto.Estado" ToStringFunc="arg => arg?.Nombre" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var item in lstEstadoProyecto)
+                {
+                    <MudSelectItem Value="@item"></MudSelectItem>
+                }
+            </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    //Variables y Parametros
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Proyecto Proyecto { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+    List<Estado> lstEstadoProyecto = new List<Estado>();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            cargarEstados();
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+    private async Task Submit()
+    {
+
+            try
+            {
+                var proyecto = await _ApplicationDbContext.Proyectos.FirstOrDefaultAsync(it => it.Id == Proyecto.Id);
+                var id = Proyecto.Estado.Id;
+                proyecto.Estado = await _ApplicationDbContext.Estados.FirstOrDefaultAsync(it=> it.Id == id);
+                _ApplicationDbContext.Proyectos.Update(proyecto);
+                
+
+                // Guarda los cambios en la base de datos.
+                await _ApplicationDbContext.SaveChangesAsync();
+                //Cerrar el Dialog
+                MudDialog.Close(DialogResult.Ok<Proyecto>(Proyecto));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+    }
+
+    //Cargar los estados de base de datos para mostrarlos en MudSelect
+    async void cargarEstados()
+    {
+        lstEstadoProyecto = await _ApplicationDbContext.Estados.OrderBy(estado => estado.Nombre).ToListAsync();
+    }
+}
+

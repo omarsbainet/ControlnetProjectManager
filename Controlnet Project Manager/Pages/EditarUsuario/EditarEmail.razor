@@ -1,0 +1,69 @@
+﻿@page "/account/manage/email"
+@layout EmptyLayout
+@using Areas.Identity.Data
+@using Data
+@using System.Text.RegularExpressions
+@inject CRUD crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDialogService _dialogService
+@inject UserManager<CPMUser> usermanager
+@inject MyCustomTheme tema;
+<style>
+    .color {
+        background-color: @tema.Theme.Palette.Background;
+    }
+
+    .boton {
+        color: white;
+        border-radius: 5px;
+        background-color: @tema.Theme.Palette.Primary;
+        text-align: left;
+    }
+</style>
+
+<MudPaper Width="45%" Class="d-flex flex-column ms-5 color gap-3" Elevation="0">
+    <MudText Typo="Typo.h5"><b>Email</b></MudText>
+    <MudTextField @bind-Value="email" Label="email" Variant="Variant.Filled" FullWidth="false"></MudTextField>
+    <MudButton Class="boton" OnClick="ActualizarUsuario" FullWidth="true">Guardar cambios</MudButton>
+</MudPaper>
+
+    
+@code {
+    [Inject] private IDialogService DialogService { get; set; }
+    CPMUser user;
+    string email = "";
+    [Inject] AuthenticationStateProvider auth { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var iduser = usermanager.GetUserId((await auth.GetAuthenticationStateAsync()).User);
+        user = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == iduser);
+        email = user.Email;
+
+    }
+    private async Task ActualizarUsuario()
+    {
+        if (user != null)
+        {
+            var regex = new Regex(@"^([\w\.\-]+)@([\w\-]+)((\.(\w){2,3})+)$");
+            Match match = regex.Match(email);
+            if (match.Success)
+            {
+                await usermanager.SetEmailAsync(user, email);
+                _ApplicationDbContext.SaveChanges();
+                await DialogService.ShowMessageBox("Cambio", $"Se ha podido cambiar el email con éxito");
+
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Error", $"No se pudo actualizar el email. Usa un email válido");
+            }
+            
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", $"No se pudo actualizar el usuario {user.UserName}");
+            return;
+        }
+    }
+}

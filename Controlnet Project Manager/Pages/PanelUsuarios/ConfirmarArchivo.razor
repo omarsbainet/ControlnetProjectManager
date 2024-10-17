@@ -1,0 +1,44 @@
+<MudDialog>
+    <DialogContent>
+
+        <div style="text-align: center">
+        <MudText>¿Seguro que quieres cargar este archivo?</MudText>
+        <br/>
+        <MudText><strong>@filename</strong></MudText>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Cargar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public string filename { get; set; }
+
+    [Inject]
+    private IDialogService DialogService { get; set; }
+
+    IEnumerable<System.Security.Claims.Claim> userClaims;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+    }
+
+    private async void Submit()
+    {
+        
+            MudDialog.Close(DialogResult.Ok<bool>(true));
+    }
+
+
+    void Cancel() => MudDialog.Cancel();
+
+}

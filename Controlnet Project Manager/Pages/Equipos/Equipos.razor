@@ -1,0 +1,318 @@
+﻿@page "/Equipos"
+
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using System.Reflection;
+@using System.ComponentModel;
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+
+@{
+    List<Button> botones = new List<Button>() { new ActionButton { Text = "Nuevo Equipo", OnClick = async () => await NewTeamDialog(), Icon = "@Icons.Material.Filled.Add" } };
+}
+@if(!Cargando){
+@if (menuRol != null)
+{
+    @if (menuRol.Crear)
+    {
+        <ToolBar Title="EQUIPOS" ButtonsLeft="botones"></ToolBar>
+    }
+    else
+    {
+        <ToolBar Title="EQUIPOS"></ToolBar>
+    }
+
+        <br />
+        <br />
+
+        <MudDataGrid @ref="@_grid" Items="FiltrarEquipos()" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Equipos</MudText>
+                <MudSpacer />
+                <MudSpacer />
+                <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense" Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+            </ToolBarContent>
+            <Columns>
+                <PropertyColumn T="Equipo" TProperty="string" Property="x => x.Nombre" Title="Nombre del equipo" />
+                <TemplateColumn CellClass="d-flex justify-end" Sortable="false">
+                    <CellTemplate>
+                        <MudTooltip Text="Ver Programadores">
+                            <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" OnClick="@(() => VerProgramadores(context.Item))" />
+                        </MudTooltip>
+                        @if (menuRol != null && menuRol.Editar)
+                        {
+                        <MudTooltip Text="Editar">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" OnClick="@((e) => { EditarEquipo(context.Item); })" />
+                        </MudTooltip>
+                        }
+                        @if (menuRol != null && menuRol.Eliminar)
+                        {
+                        <MudTooltip Text="Eliminar">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" OnClick="@(() => EliminarEquipo(context.Item))"></MudIconButton>
+                        </MudTooltip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+
+            <PagerContent>
+                <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+            </PagerContent>
+        </MudDataGrid>
+
+
+
+
+
+    <MudDialog @bind-IsVisible="@_uploadInProgress">
+        <DialogContent>
+            <MudText Typo="Typo.h6" Align="Align.Center">Cargando Equipos ...</MudText>
+            <br />
+            <MudProgressLinear Value="@progress" Striped="true" Size="Size.Medium" Buffer="true" BufferValue="@progressBuffer" />
+            <br />
+            <MudText Align="Align.Center">@progressText</MudText>
+            </DialogContent>
+        </MudDialog>
+}
+else if (menuRol == null)
+{
+    <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <ToolBar Title="EQUIPOS"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    public ProgramadoresEquipos ProgramadoresEquipos { get; set; }
+    MudDialogInstance MudDialog { get; set; }
+    Stack<EquiposProyecto> navegacionUsuarios = new Stack<EquiposProyecto>();
+    public EquiposProyecto EquiposProyectos { get; set; }
+    public Proyecto Proyecto { get; set; }
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    public bool activados = true;
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    string _searchString = "";
+    private MudDataGrid<Equipo> _grid;
+    private int _selectedPage;
+    public CPMUser usuario { get; set; }
+    private bool Cargando = true;
+    List<ProgramadoresEquipos> lstProgramadoresEquipos = new List<ProgramadoresEquipos>();
+    List<Equipo> lstEquipos = new List<Equipo>();
+    [Inject] private NavigationManager navigationManager { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            Cargando = false;
+            await CargarEquipos();
+            await CargarProgramadoresEquipos();
+            await CargarDatosAsync();
+            _selectedPage = 0;
+            StateHasChanged();
+        }
+
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+        StateHasChanged();
+    }
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+    async Task CargarDatosAsync()
+    {
+        lstEquipos = FiltrarEquipos();
+    }
+
+    private async Task CargarProgramadoresEquipos()
+    {
+        lstProgramadoresEquipos = _ApplicationDbContext.ProgramadoresEquipos.ToList();
+    }
+
+    async Task CargarEquipos()
+    {
+        lstEquipos = _ApplicationDbContext.Equipos.ToList();
+    }
+
+    private List<Equipo> FiltrarEquipos()
+    {
+        return lstEquipos.FindAll(it =>
+            it.Nombre != null && it.Nombre.ToUpper().Contains(_searchString.ToUpper())
+        );
+    }
+
+    private async void VerProgramadores(Equipo equipo)
+    {
+        try
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+            var parameters = new DialogParameters();
+            parameters.Add("Equipo", equipo);
+            lstProgramadoresEquipos = await _ApplicationDbContext.ProgramadoresEquipos
+                .Include(pe => pe.Programador)
+                .Include(pe => pe.Equipo)
+                .ToListAsync();
+            parameters.Add("lstProgramadoresEquipos", lstProgramadoresEquipos);
+            var dialog = await _dialogService.Show<VerProgramadores>("Programadores", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                await CargarProgramadoresEquipos();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Se ha producido un error: {ex.Message}");
+        }
+    }
+
+    private async Task EditarEquipo(Equipo equipo)
+    {
+        try
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+            var parameters = new DialogParameters();
+            parameters.Add("Equipo", equipo);
+
+            var dialog = await _dialogService.Show<NewEquipo>("Editar equipo", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                await _ApplicationDbContext.SaveChangesAsync();
+                await CargarEquipos();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Se ha producido un error: {ex.Message}");
+        }
+    }
+
+    private async void EliminarEquipo(Equipo equipo)
+    {
+        try
+        {
+            bool? result = await _dialogService.ShowMessageBox("Eliminar equipo", "¿Seguro que quieres eliminar este equipo?", "Si", "No");
+            if (result == true)
+            {
+                if (result == true)
+                {
+                    _ApplicationDbContext.Equipos.Remove(equipo);
+                    await _ApplicationDbContext.SaveChangesAsync();
+                    await CargarEquipos();
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Se ha producido un error: {ex.Message}");
+        }
+    }
+
+    private async Task NewTeamDialog()
+    {
+        try
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+            var parameters = new DialogParameters();
+            var dialog = await _dialogService.Show<NewEquipo>("Nuevo equipo", parameters, options).Result;
+
+            if (dialog.Data != null)
+            {
+                await _ApplicationDbContext.SaveChangesAsync();
+                await CargarEquipos();
+                await CargarDatosAsync();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Se ha producido un error: {ex.Message}");
+        }
+    }
+}

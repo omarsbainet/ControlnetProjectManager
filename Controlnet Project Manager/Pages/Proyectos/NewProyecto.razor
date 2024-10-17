@@ -1,0 +1,168 @@
+@*@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject ApplicationDbContext _ApplicationDbContext;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper>
+                        <MudTextField @bind-Value="Proyecto.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    </MudPaper>
+                    <MudDatePicker Date="@Proyecto.FechaPrevistaContrato" DateChanged="e => Proyecto.FechaPrevistaContrato = e.Value.Date" Label="Fecha de Entrega" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudDatePicker Date="@Proyecto.FechaPrevistaEntrega" DateChanged="e => Proyecto.FechaPrevistaEntrega = e.Value.Date" Label="Fecha de Entrega" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+                    <MudNumericField @bind-Value="Proyecto.HorasEstimadas" Label="Horas Estimadas" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudSelect Label="Estado" @bind-Value="Proyecto.Estado" Variant="Variant.Outlined" Margin="Margin.Dense">
+                        @foreach (var item in lstEstadoProyecto)
+                        {
+                            <MudSelectItem Value="@item">@item.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        @if (Proyecto.Id != null && Proyecto.Id != 0)
+        {
+            <MudButton Color="Color.Error" OnClick="Eliminar">Eliminar</MudButton>
+        }
+
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public string ID { get; set; }
+    [Parameter] public Proyecto Proyecto { get; set; }
+    //private Proyecto Proyecto { get; set; } = new Proyecto();
+
+
+
+
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<Estado> lstEstadoProyecto = new List<Estado>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (Proyecto == null)
+        {
+            Proyecto = new Proyecto();
+        }
+
+        if (Proyecto.Id != 0 && Proyecto.Id != null)
+        {
+            Proyecto = _ApplicationDbContext.Proyectos.FirstOrDefault(u => u.Id == Proyecto.Id);
+        }
+
+        //// Obtener la hora actual en el formato de España
+        //TimeZoneInfo zonaHorariaEspana = TimeZoneInfo.FindSystemTimeZoneById("Romance Standard Time");
+        //DateTime horaActualEspana = TimeZoneInfo.ConvertTime(DateTime.Now, zonaHorariaEspana);
+
+        //// Mantener la fecha seleccionada por el usuario y ajustar solo la hora a la hora actual en España
+        //if (Proyecto.FechaPrevistaContrato.Date == DateTime.Today)
+        //{
+        //    Proyecto.FechaPrevistaContrato = Proyecto.FechaPrevistaContrato.Date + horaActualEspana.TimeOfDay;
+        //}
+
+        //if (Proyecto.FechaPrevistaEntrega.Date == DateTime.Today)
+        //{
+        //    Proyecto.FechaPrevistaEntrega = Proyecto.FechaPrevistaEntrega.Date + horaActualEspana.TimeOfDay;
+        //}
+
+        // Establecer el valor inicial del selector de fecha
+        Proyecto.FechaPrevistaContrato = DateTime.Now; // Configura FechaPrevistaContrato con la fecha y hora actual
+        Proyecto.FechaPrevistaEntrega = DateTime.Now; // Configura FechaPrevistaEntrega con la fecha y hora actual
+
+        // Cargar los estados
+        cargarEstados();
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Proyecto).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (Proyecto.Id != 0 && Proyecto.Id != null)
+                {
+                    _ApplicationDbContext.Proyectos.Update(Proyecto);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(Proyecto.Nombre))
+                    {
+                        _ApplicationDbContext.Proyectos.Add(Proyecto);
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del proyecto es obligatorio");
+                        return;
+                    }
+                }
+
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<Proyecto>(Proyecto));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    private async void Eliminar()
+    {
+        var result = await DialogService.ShowMessageBox("Eliminar proyecto", "¿Seguro que quieres eliminar este proyecto?", "Si", "No");
+
+        if (result is true)
+        {
+            _ApplicationDbContext.Proyectos.Remove(Proyecto);
+            await _ApplicationDbContext.SaveChangesAsync();
+            MudDialog.Close(DialogResult.Ok<Proyecto>(new Proyecto()));
+        }
+    }
+    void cargarEstados()
+    {
+        lstEstadoProyecto = _ApplicationDbContext.Estados.OrderBy(estado => estado.Nombre).ToList();
+    }
+
+
+    public class clsProyecto
+    {
+        public Estado Estado { get; set; }
+    }
+}*@

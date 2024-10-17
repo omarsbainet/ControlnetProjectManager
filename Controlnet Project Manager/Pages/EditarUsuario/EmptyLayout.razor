@@ -1,0 +1,178 @@
+﻿@using MudBlazor.Utilities
+@inherits LayoutComponentBase
+@inject IHttpContextAccessor _httpContextAccessor
+@inject UserManager<CPMUser> _UserManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+@using Microsoft.Identity
+@using Controlnet_Project_Manager.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@inject NavigationManager NavigationManager
+@inject SignInManager<CPMUser> SignInManager
+@inject UserManager<CPMUser> usermanager
+@inject MyCustomTheme tema;
+
+<style>
+    .color {
+        background-color: @tema.Theme.Palette.Background;
+    }
+
+    .linkselected{
+        color:white;
+        border-radius: 5px;
+        background-color: @tema.Theme.Palette.Primary;
+        text-align: left;
+    }
+
+    .linknotselected {
+        color: @tema.Theme.Palette.Primary;
+        text-align: left;
+    }
+
+    .mudimage-container {
+        width:45px;
+        height:45px;
+        border-radius: 50%;
+    }
+</style>
+
+<MudThemeProvider Theme="MyCustomTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudLayout Style="height: 100%; width:100%;">
+    <MudAppBar Color="Color.Primary" Class="d-flex"Fixed="false" Elevation="0">
+            <MudButton OnClick="inicio" Class="rounded-circle" Size="Size.Small">
+                <MudImage Alt="CPM" Src="favicon.png" Height="45" Width="45" Class="rounded-circle" onclick="@(()=>inicio())"></MudImage>
+            </MudButton>
+        <MudSpacer />
+        <MudText Typo=Typo.h6 Class="align-self-center"><b>Bienvenido @nombre</b></MudText>
+        <MudSpacer />
+        <form method="post" action="Identity/Account/Logout">
+                <a onclick="this.closest('form').submit();">
+                <MudIconButton Icon="@Icons.Material.Filled.Logout" Color="Color.Inherit" />
+                </a></form>
+        
+    </MudAppBar>
+    <MudMainContent Style="padding-top:0" Class="color">
+        <MudContainer Style="height: 100%" Class="color" MaxWidth="MaxWidth.False">
+            <MudPaper Width="100%" Height="100%" Class="mt-4 align-self-center color" Elevation="0">
+                <MudContainer MaxWidth="MaxWidth.Medium" Class="color">
+                    <MudText Typo="Typo.h3">Información de tu cuenta</MudText>
+                    <MudText Typo="Typo.h4">Cambia los ajustes de tu cuenta</MudText>
+                    <MudDivider Light="true" Class="my-3"/>
+                    <MudPaper Class="d-flex flex-row color" Elevation="0">
+                        <MudPaper Width="23%" Elevation="0" Class="color ps-n3">
+                            <MudNavMenu Class="ps-n3" Color="Color.Primary" Bordered="true">
+                                <MudNavGroup Title="Perfil" Expanded="@expandedgroup1" Icon="@Icons.Material.Filled.ManageAccounts" IconColor="Color.Primary">
+                                @for(int i = 0; i<2; i++)
+                                {
+                                    var esta = i;
+                                    @if (numerito == esta + 1)
+                                    {
+                                        <MudNavLink Class="linkselected ps-n3" OnClick="@(()=>pulsar(esta+1))" Icon="@iconosApartados[esta]" IconColor="Color.Secondary"><b>@nombresApartados[esta]</b></MudNavLink>
+                                    }
+                                    else
+                                    {
+                                        <MudNavLink Class="linknotselected ps-n3" OnClick="@(()=>pulsar(esta+1))" Icon="@iconosApartados[esta]" IconColor="Color.Primary"><b>@nombresApartados[esta]</b></MudNavLink>
+                                    }
+                                }
+                                </MudNavGroup>
+                                <MudNavGroup Title="Seguridad" Expanded="@expandedgroup2" Icon="@Icons.Filled.Lock" IconColor="Color.Primary">
+                                @for(int i = 2; i<posiciones.Length; i++)
+                                {
+                                    var esta = i;
+                                    @if (numerito == esta+1)
+                                    {
+                                        <MudNavLink Class="linkselected ps-n3" OnClick="@(()=>pulsar(esta+1))" Icon="@iconosApartados[esta]" IconColor="Color.Secondary"><b>@nombresApartados[esta]</b></MudNavLink>
+                                    }
+                                    else
+                                    {
+                                        <MudNavLink Class="linknotselected ps-n3" OnClick="@(()=>pulsar(esta+1))" Icon="@iconosApartados[esta]" IconColor="Color.Primary"><b>@nombresApartados[esta]</b></MudNavLink>
+                                    }                                     
+                                }
+                                </MudNavGroup>
+
+                            </MudNavMenu>
+                        </MudPaper>
+                        <MudPaper Width="76%" Class="color ms-4 mt-2" Elevation="0">
+                            @Body
+                        </MudPaper>
+                    </MudPaper>
+                </MudContainer>
+            </MudPaper>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    [Inject] AuthenticationStateProvider auth { get; set; }
+
+    int numerito = 1;
+
+    String[] posiciones = new String[] { "/account/manage","/account/manage/email", "/account/manage/password" };
+    String[] nombresApartados = new String[] { "Datos", "Email", "Contraseña" };
+    String[] iconosApartados = new String[] { Icons.Material.Filled.Person, Icons.Material.Filled.Email, Icons.Material.Filled.Key };
+    CPMUser user;
+    string nombre = "";
+    bool expandedgroup1 = true;
+    bool expandedgroup2 = false;
+
+
+    void pulsar(int numero)
+    {
+        numerito = numero;
+        NavigationManager.NavigateTo(posiciones[numero - 1]);
+        StateHasChanged();
+        if (numero - 1 < 2)
+        {
+            expandedgroup1 = true;
+        }
+        else
+        {
+            expandedgroup2 = true;
+        }
+        StateHasChanged();
+    }
+    void inicio()
+    {
+        NavigationManager.NavigateTo("/");
+
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        var iduser = usermanager.GetUserId((await auth.GetAuthenticationStateAsync()).User);
+        user = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == iduser);
+
+        nombre = user.UserName;
+    }
+
+
+    MudTheme MyCustomTheme = new MudTheme()
+        {
+            Palette = new PaletteLight()
+            {
+                Primary = "#009ee0",
+                Secondary = Colors.Shades.White,
+                AppbarBackground = Colors.Shades.White,
+                DrawerIcon = Colors.Shades.White,
+                Background = "#e3f2fd"
+            },
+            PaletteDark = new PaletteDark()
+            {
+                //Primary = Colors.Blue.Lighten1
+            },
+            LayoutProperties = new LayoutProperties()
+            {
+                DrawerWidthLeft = "260px",
+                DrawerWidthRight = "300px"
+            }
+        };
+}

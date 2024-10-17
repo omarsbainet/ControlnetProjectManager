@@ -1,0 +1,693 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore;
+@using System.ComponentModel;
+@using System.Reflection;
+
+@inject AuthenticationStateProvider _auth
+@inject IHttpContextAccessor _httpContextAccessor
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent>
+
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+
+            <MudTextField @bind-Value="rol.Name" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" />
+            <MudTextField @bind-Value="rol.PorcentajeConversion" Label="Conversion" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar la conversion" Format="F2" />
+            @if (updating)
+            {
+                <div style="margin-top: 30px; margin-bottom: 10px;">
+                    <MudText style="font-weight: bold;">Configuración de acceso</MudText>
+                </div>
+
+                @foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+                {
+                    @if (GetDefaultValue(menuOption).Equals(null))
+                    {
+                        <div>
+                            <MudSwitch T="bool" Checked="false" Color="Color.Primary">
+                                Error al cargar el menu.
+                            </MudSwitch>
+                        </div>
+                    }
+                    else
+                    {
+                        var menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption);
+
+                        @if (menuOption >= MenuEnum.Usuarios && menuOption <= MenuEnum.Clientes)
+                        {
+                            <div style="margin-left: 30px;">
+                                <MudSwitch T="bool" CheckedChanged="@(e => SwitchCheckedChanged(menuOption, e))" Checked="@(SwitchChecked(menuOption))" Color="Color.Primary">
+                                    @GetDefaultValue(menuOption)
+                                </MudSwitch>
+                                @if (menuRol != null)
+                                {
+                                    <div style="margin-left: 60px;">
+                                        <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowCreate(menuOption, e))" Checked="@(SwitchCreateChecked(menuOption))" Color="Color.Primary">
+                                            Crear
+                                        </MudSwitch>
+                                        <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowEdit(menuOption, e))" Checked="@(SwitchEditChecked(menuOption))" Color="Color.Primary">
+                                            Editar
+                                        </MudSwitch>
+                                        <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowDelete(menuOption, e))" Checked="@(SwitchDeleteChecked(menuOption))" Color="Color.Primary">
+                                            Eliminar
+                                        </MudSwitch>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div>
+                                <MudSwitch T="bool" CheckedChanged="@(e => SwitchCheckedChanged(menuOption, e))" Checked="@(SwitchChecked(menuOption))" Color="Color.Primary">
+                                    @GetDefaultValue(menuOption)
+                                </MudSwitch>
+
+                                @if (menuOption != MenuEnum.Configuracion && menuRol != null && menuOption != MenuEnum.VistaTrabajo)
+                                {
+                                    <div style="margin-left: 30px;">
+                                        @if (menuOption != MenuEnum.EstadoProyectos && menuOption != MenuEnum.Calendario)
+                                        {
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowCreate(menuOption, e))" Checked="@(SwitchCreateChecked(menuOption))" Color="Color.Primary">
+                                                Crear
+                                            </MudSwitch>    
+                                        }
+
+                                        @if (menuOption != MenuEnum.Informacion)
+                                        {
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowEdit(menuOption, e))" Checked="@(SwitchEditChecked(menuOption))" Color="Color.Primary">
+                                                Editar
+                                            </MudSwitch>
+                                        }
+                                        @if (menuOption != MenuEnum.EstadoProyectos && menuOption != MenuEnum.Calendario)
+                                        {
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowDelete(menuOption, e))" Checked="@(SwitchDeleteChecked(menuOption))" Color="Color.Primary">
+                                                Eliminar
+                                            </MudSwitch>
+                                        }
+                                        @if (menuOption == MenuEnum.Desarrollo || menuOption == MenuEnum.Incidencias)
+                                        {
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowFinish(menuOption, e))" Checked="@(SwitchFinishChecked(menuOption))" Color="Color.Primary">
+                                                Terminar
+                                            </MudSwitch>
+                                        }
+                                        @if (menuOption == MenuEnum.Peticiones)
+                                        {
+
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowAccept(menuOption, e))" Checked="@(SwitchAcceptChecked(menuOption))" Color="Color.Primary">
+                                                Aceptar
+                                            </MudSwitch>
+                                            <MudSwitch class="d-inline-block" T="bool" CheckedChanged="@(e => allowDeny(menuOption, e))" Checked="@(SwitchDenyChecked(menuOption))" Color="Color.Primary">
+                                                Rechazar
+                                            </MudSwitch>
+
+                                        }
+
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                    }
+                }
+            }
+
+        </MudForm>
+            
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    MudForm form;
+    [Parameter] public Rol rol { get; set; }
+
+    bool success;
+    private List<MenuRol> Menus = new List<MenuRol>();
+    string[] errors = { };
+    bool updating;
+
+    private List<MenuRol> listaMenusAnadir = new List<MenuRol>();
+
+    //Dar permiso para crear en el menu
+    private void allowCreate(MenuEnum menuOption, bool isChecked)
+    {
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if(menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Crear = true;
+            }
+            else
+            {
+                menuRol.Crear = false;
+            }
+        }
+    }
+
+    //Dar permiso para editar en el menu
+    private void allowEdit(MenuEnum menuOption, bool isChecked)
+    {
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if (menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Editar = true;
+            }
+            else
+            {
+                menuRol.Editar = false;
+            }
+        }
+    }
+
+    //Dar permiso para eliminar en el menu
+    private void allowDelete(MenuEnum menuOption, bool isChecked)
+    {
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if (menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Eliminar = true;
+            }
+            else
+            {
+                menuRol.Eliminar = false;
+            }
+        }
+    }
+
+    //Dar permiso para terminar en el menu
+    private void allowFinish(MenuEnum menuOption, bool isChecked)
+    {
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if (menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Terminar = true;
+            }
+            else
+            {
+                menuRol.Terminar = false;
+            }
+        }
+    }
+
+    //Dar permiso para Aceptar en el menu
+    private void allowAccept(MenuEnum menuOption, bool isChecked)
+    {
+
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if (menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Aceptar = true;
+            }
+            else
+            {
+                menuRol.Aceptar = false;
+            }
+        }
+    }
+
+    //Dar permiso para Rechazar en el menu
+    private void allowDeny(MenuEnum menuOption, bool isChecked)
+    {
+        MenuRol menuRol = listaMenusAnadir.FirstOrDefault(m => m.IdMenu == (int)menuOption && m.Rol == rol);
+        if (menuRol != null)
+        {
+            if (isChecked)
+            {
+                menuRol.Rechazar = true;
+            }
+            else
+            {
+                menuRol.Rechazar = false;
+            }
+        }
+    }
+
+    private bool SwitchDenyChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Rechazar)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private bool SwitchAcceptChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Aceptar)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    //Se comprueba si el rol actual tiene acceso al permiso de crear del menu y se establece en el switch (true o false)
+    private bool SwitchCreateChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Crear)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    //Se comprueba si el rol actual tiene acceso al permiso de editar del menu y se establece en el switch (true o false)
+    private bool SwitchEditChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Editar)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    //Se comprueba si el rol actual tiene acceso al permiso de eliminar del menu y se establece en el switch (true o false)
+    private bool SwitchDeleteChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Eliminar)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    //Se comprueba si el rol actual tiene acceso al permiso de terminar del menu y se establece en el switch (true o false)
+    private bool SwitchFinishChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                if (menuRol.Terminar == false)
+                {
+                    return false;
+                }
+                if (menuRol.Terminar ?? true)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string name = Enum.GetName(type, value);
+        if (name == null)
+            return null;
+
+        FieldInfo fieldInfo = type.GetField(name);
+        if (fieldInfo == null)
+            return null;
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+
+    //Metodo para obtener el default value de un valor de un enum
+    private string GetDefaultValue(Enum value)
+    {
+        FieldInfo field = value.GetType().GetField(value.ToString());
+        DefaultValueAttribute[] attributes =
+            (DefaultValueAttribute[])field.GetCustomAttributes(typeof(DefaultValueAttribute), false);
+
+        if (attributes.Length > 0)
+            return attributes[0].Value.ToString();
+
+        return null;
+    }
+
+
+    //Se comprueba si el rol actual tiene acceso al menu que se le pasa por parametro y se establece en el switch (true o false)
+    private bool SwitchChecked(MenuEnum menuOption)
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)menuOption)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+
+    //Segun el switch, se añade o se elimina de la lista los menus que el rol podra acceder
+    private void SwitchCheckedChanged(MenuEnum menuOption, bool isChecked)
+    {
+        if (!isChecked)
+        {
+            if((int)menuOption == (int)MenuEnum.Configuracion)
+            {
+                SetSubGroupConfiguration(isChecked);
+            }
+            else
+            {
+                var menuEliminar = listaMenusAnadir.FirstOrDefault(menu => menu.IdMenu == (int)menuOption);
+                if (menuEliminar != null)
+                {
+                    this.listaMenusAnadir.Remove(menuEliminar);
+                }
+            }
+        }
+        else
+        {
+            if((int)menuOption == (int)MenuEnum.Configuracion)
+            {
+                SetSubGroupConfiguration(isChecked);
+            }
+            else
+            {
+                MenuRol newMenuRol = new MenuRol
+                    {
+                        IdMenu = (int)menuOption,
+                        Rol = rol,
+                        Crear = false,
+                        Editar = false,
+                        Eliminar = false
+                };
+                this.listaMenusAnadir.Add(newMenuRol);
+            }
+        }
+
+        if (IsSubGroupConfiguration(menuOption))
+        {
+            CheckGroupConfiguration(menuOption, isChecked);
+        }
+    }
+
+    //Añade o elimina a la lista todos los menus pertenecientes al menu configuracion.
+    private void SetSubGroupConfiguration(bool isChecked)
+    {
+        if (isChecked)
+        {
+            foreach (MenuEnum menuEnum in Enum.GetValues(typeof(MenuEnum)))
+            {
+                if ((int)menuEnum <= (int)MenuEnum.Clientes)
+                {
+                    MenuRol newMenuRol = new MenuRol
+                        {
+                            IdMenu = (int)menuEnum,
+                            Rol = rol,
+                            Crear = false,
+                            Editar = false,
+                            Eliminar = false
+                        };
+                    this.listaMenusAnadir.Add(newMenuRol);
+                }
+            }
+        }
+        else
+        {
+            this.listaMenusAnadir.RemoveAll(menuRol => menuRol.IdMenu > 0 && menuRol.IdMenu <= (int)MenuEnum.Clientes);
+        }
+    }
+
+    //Comprobar si el menuOption pasado por parametro pertenece al grupo del menu configuracion
+    private bool IsSubGroupConfiguration(MenuEnum menuOption)
+    {
+        if ((int)menuOption >= (int)MenuEnum.Usuarios && (int)menuOption <= (int)MenuEnum.Clientes)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    //Comprobar si existe en la lista de menus el menu configuracion
+    private bool ConfigurationChecked()
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu == (int)MenuEnum.Configuracion)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //Comprobar en a lista si existe un menu perteneciente al menu configuracion
+    private bool SubGroupConfigurationChecked()
+    {
+        foreach (MenuRol menuRol in this.listaMenusAnadir)
+        {
+            if (menuRol.IdMenu >= (int)MenuEnum.Usuarios && menuRol.IdMenu <= (int)MenuEnum.Clientes)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //Para el grupo configuracion. Si existe un menu del grupo configuracion, que se checkee tambien el menu configuracion, si no, que no se checkee.
+    private void CheckGroupConfiguration(MenuEnum menuOption, bool isChecked)
+    {
+        bool configChecked = ConfigurationChecked();
+        bool subGroupChecked = SubGroupConfigurationChecked();
+
+        if (isChecked && !configChecked && subGroupChecked)
+        {
+            MenuRol newMenuRol = new MenuRol
+                {
+                    IdMenu = (int)MenuEnum.Configuracion,
+                    Rol = rol,
+                    Crear = false,
+                    Editar = false,
+                    Eliminar = false
+                };
+
+            this.listaMenusAnadir.Add(newMenuRol);
+        }
+        else
+        {
+            if (configChecked && !subGroupChecked && !isChecked)
+            {
+                var menuEliminar = listaMenusAnadir.FirstOrDefault(menu => menu.IdMenu == (int)MenuEnum.Configuracion);
+                if (menuEliminar != null)
+                {
+                    this.listaMenusAnadir.Remove(menuEliminar);
+                }
+            }
+        }
+    }
+
+    //Añadir a la lista los menus que tiene el rol actualmente
+    private void CargarMenusListaSeleccionados()
+    {
+        foreach (MenuRol menuRol in this.Menus)
+        {
+            if (menuRol.IdMenu > 0 && menuRol.Rol == rol)
+            {
+                this.listaMenusAnadir.Add(menuRol);
+            }
+        }
+    }
+
+    void Cancel()
+    {
+        foreach (MenuRol mr in Menus){
+
+            var existingEntry = _ApplicationDbContext.MenuRoles.Local.FirstOrDefault(e => e.ID == mr.ID);
+            if (existingEntry == null)
+            {
+                _ApplicationDbContext.Entry(rol).Reload();
+                _ApplicationDbContext.Entry(mr).Reload();
+            }
+        }
+        MudDialog.Cancel();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (rol != null)
+        {
+            rol = _ApplicationDbContext.Roles.FirstOrDefault(it=> it.Id == rol.Id);
+            updating = true;
+        }
+        else
+        {
+            rol = new Rol();
+            rol.Orden = (_ApplicationDbContext.Roles.AsNoTracking().OrderByDescending(it => it.Orden).FirstOrDefault()?.Orden + 1)??1;
+            rol.Name = "";
+            rol.PorcentajeConversion = 0;
+        }
+
+        CargarMenus();
+        CargarMenusListaSeleccionados();
+    }
+
+    private void CargarMenus()
+    {
+        this.Menus = _ApplicationDbContext.MenuRoles
+            .Where(menuRol => menuRol.Rol == rol)
+            .Select(menuRol => new MenuRol
+                {
+                    ID = menuRol.ID,
+                    IdMenu = menuRol.IdMenu,
+                    Rol = menuRol.Rol,
+                    Crear = menuRol.Crear,
+                    Editar = menuRol.Editar,
+                    Eliminar = menuRol.Eliminar,
+                    Aceptar = menuRol.Aceptar,
+                    Rechazar = menuRol.Rechazar,
+                    Terminar = menuRol.Terminar
+                })
+            .ToList();
+    }
+
+    //Elimina o agrega a la base de datos los menus que tiene acceso el rol
+    private void AsignarMenusBaseDatos()
+    {
+        AddMenus();
+        DeleteMenus();
+        this.listaMenusAnadir.Clear();
+        this.Menus.Clear();
+    }
+
+    //Añade y actualiza la base de datos nuevos menus a los cuales se le ha dado acceso al rol
+    private void AddMenus()
+    {
+        foreach (var menuAnadir in listaMenusAnadir)
+        {
+            var existingMenuRol = _ApplicationDbContext.MenuRoles.FirstOrDefault(menuRol => menuRol.IdMenu == menuAnadir.IdMenu && menuRol.Rol == rol);
+
+            if (existingMenuRol != null)
+            {
+                if (MenuRolDatosActualizados(existingMenuRol, menuAnadir))
+                {
+                    _ApplicationDbContext.MenuRoles.Remove(existingMenuRol);
+                    _ApplicationDbContext.MenuRoles.Add(menuAnadir);
+                }
+            }
+            else
+            {
+                _ApplicationDbContext.MenuRoles.Add(menuAnadir);
+            }
+        }
+        _ApplicationDbContext.SaveChanges();
+    }
+
+    //Elimina de la base de datos los menus a los cuales se le a quitado el acceso al rol
+    private void DeleteMenus()
+    {
+        var menuRolesParaEliminar = _ApplicationDbContext.MenuRoles.Where(menuRol => menuRol.Rol == rol);
+
+        foreach (var menuExistente in menuRolesParaEliminar)
+        {
+            var menuAnadir = listaMenusAnadir.FirstOrDefault(menu => menu.IdMenu == menuExistente.IdMenu);
+
+            if (menuAnadir == null)
+            {
+                _ApplicationDbContext.MenuRoles.Remove(menuExistente);
+            }
+        }
+        _ApplicationDbContext.SaveChanges();
+    }
+
+    //Comprobar si al usuario existente se le han actualizado los datos
+    public static bool MenuRolDatosActualizados(MenuRol existingMenuRol, MenuRol menuAnadir)
+    {
+        return existingMenuRol.Crear != menuAnadir.Crear ||
+               existingMenuRol.Editar != menuAnadir.Editar ||
+               existingMenuRol.Eliminar != menuAnadir.Eliminar;
+    }
+
+    private async void Submit()
+    {
+        await form.Validate();
+
+        if (success)
+        {
+            if (updating)
+            {
+                _ApplicationDbContext.Roles.Update(rol);
+                foreach (Controlnet_Project_Manager.Areas.Identity.Data.MenuRol mr in Menus)
+                {
+                    if (mr.Rol == null)
+                    {
+                        mr.Rol = rol;
+                        _ApplicationDbContext.MenuRoles.Add(mr);
+                    }
+                    else
+                    {
+                        var existingEntry = _ApplicationDbContext.MenuRoles.Local.FirstOrDefault(e => e.ID == mr.ID);
+                        if (existingEntry != null)
+                        {
+                            _ApplicationDbContext.Entry(existingEntry).CurrentValues.SetValues(mr);
+                        }
+                        else
+                        {
+                            _ApplicationDbContext.MenuRoles.Update(mr);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                _ApplicationDbContext.Roles.Add(rol);
+                Menus.ForEach(it => it.Rol = rol);
+                _ApplicationDbContext.MenuRoles.AddRange(Menus);
+            }
+            _ApplicationDbContext.SaveChanges();
+
+            MudDialog.Close(DialogResult.Ok<Rol>(rol));
+        }
+
+        AsignarMenusBaseDatos();
+    }
+
+
+}

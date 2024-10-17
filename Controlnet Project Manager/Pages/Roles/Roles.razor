@@ -1,0 +1,340 @@
+﻿@page "/Roles"
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Shared
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using System.Reflection;
+@using System.ComponentModel;
+
+@inject IHttpContextAccessor _httpContextAccessor
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService DialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager NavigationManager
+@attribute [Authorize]
+
+    @{
+        List<Button> botones = new List<Button>()
+        {
+            new ActionButton { Text = "Nuevo rol", OnClick = NewRol, Icon = @Icons.Material.Filled.Add }
+        };
+    }
+@if (!Cargando)
+{
+@if (menuRol != null)
+{
+    @if (menuRol.Crear)
+    {
+        <ToolBar Title="ROLES" ButtonsLeft="botones"></ToolBar>
+    }
+    else
+    {
+        <ToolBar Title="ROLES"></ToolBar>
+    }
+
+    <br/>
+    <br/>
+
+    // El manejo del orden en que se muestran los roles se ha corregido. Se ha cambiado ShowMenuIcon de false a true porque esto hacía que crease conflicto con el icono de ordenar.
+
+        <MudDataGrid Items="@lstRoles" T="Rol" RowClick="@((x)=>EditRol(x.Item))" SortMode="SortMode.None" Hover="true" ShowColumnOptions="false" ShowMenuIcon="true" Dense="true" Hideable="true">
+        <Columns>
+            <PropertyColumn T="Rol" TProperty="int" Property="rol => rol.Orden" Title="Orden"></PropertyColumn>
+            <PropertyColumn T="Rol" TProperty="string" Property="rol => rol.Name" Title="Nombre"/>
+                <TemplateColumn Sortable="false" Title="Plantilla">
+                    <CellTemplate>
+                        <span @onclick:stopPropagation="true">
+                            <MudTooltip Text="Activar/Desactivar">
+                                <MudSwitch T="bool" Checked="@context.Item.Plantilla" ThumbIcon="@(context.Item.Plantilla ? Icons.Material.Filled.Done : Icons.Material.Filled.Close)" ThumbIconColor="@(context.Item.Plantilla ? Color.Success : Color.Error)" CheckedChanged="(e) => { if (menuRol != null && menuRol.Editar) EsPlantilla(e, context.Item); }" />
+                            </MudTooltip>
+                        </span>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false">
+                    <CellTemplate>
+                        @if (menuRol != null && menuRol.Editar)
+                        {
+                            <MudTooltip Text="Mover arriba">
+                                <MudIconButton Icon="@Icons.Material.Filled.MoveUp" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@(() => MoverArriba(context.Item))"></MudIconButton>
+                            </MudTooltip>
+
+                            <MudTooltip Text="Mover abajo">
+                                <MudIconButton Icon="@Icons.Material.Filled.MoveDown" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@(() => MoverAbajo(context.Item))"></MudIconButton>
+                            </MudTooltip>
+
+                            <MudTooltip Text="Editar">
+                                <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EditRol(context.Item); })" />
+                            </MudTooltip>
+                        }
+                        @if (menuRol != null && menuRol.Eliminar)
+                        {
+                            <MudTooltip Text="Eliminar">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@(() => EliminarRol(context.Item))"></MudIconButton>
+                            </MudTooltip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+        </Columns>
+    </MudDataGrid>
+}
+else if(menuRol == null)
+{
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <ToolBar Title="ROLES"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    List<Rol> lstRoles = new List<Rol>();
+    ToolBar toolbar = new ToolBar();
+    public CPMUser usuario { get; set; }
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+
+
+    private async Task MoverArriba(Rol rol)
+    {
+        if (rol.Orden != 1)
+        {
+            var antiguoRol = _ApplicationDbContext.Roles.FirstOrDefault(it => it.Orden == rol.Orden - 1);
+            if (antiguoRol != null)
+            {
+                antiguoRol.Orden++;
+                rol.Orden--;
+
+                _ApplicationDbContext.Roles.Update(rol);
+                _ApplicationDbContext.Roles.Update(antiguoRol);
+
+                await _ApplicationDbContext.SaveChangesAsync();
+
+                // Desvincular las entidades del contexto después de la modificación
+                _ApplicationDbContext.Entry(rol).State = EntityState.Detached;
+                _ApplicationDbContext.Entry(antiguoRol).State = EntityState.Detached;
+
+                await CargarRoles();
+                StateHasChanged();
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Editar rol", "El rol anterior no se encontró");
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Editar rol", "El rol es el de mayor categoría");
+            StateHasChanged();
+        }
+    }
+
+    private async Task EsPlantilla(bool? plantilla, Rol rol)
+    {
+        try
+        {
+            if (plantilla != null)
+            {
+                rol.Plantilla = plantilla.Value;
+                _ApplicationDbContext.ChangeTracker.Clear();
+                _ApplicationDbContext.Roles.Update(rol);
+                _ApplicationDbContext.SaveChanges();
+            }
+            await CargarRoles();
+            StateHasChanged();
+        } catch(Exception e)
+        {
+            await EsPlantilla(plantilla, rol);
+        }
+    }
+
+    private async Task MoverAbajo(Rol rol)
+    {
+        int totalRoles = _ApplicationDbContext.Roles.AsNoTracking().Count(); // Accedemos al número de roles para saber el último de los roles
+
+        if (rol.Orden != totalRoles)
+        {
+            var antiguoRol = _ApplicationDbContext.Roles.FirstOrDefault(it => it.Orden == rol.Orden + 1);
+
+            if (antiguoRol != null)
+            {
+                await MoverArriba(antiguoRol);
+                /* 
+                * Se puede borrar:
+                antiguoRol.Orden--;
+                rol.Orden++;
+
+                _ApplicationDbContext.Roles.Update(rol); // Aqui es donde se para la app cuando intenas moverAbajo el primero de la lista
+                _ApplicationDbContext.Roles.Update(antiguoRol);
+
+                await _ApplicationDbContext.SaveChangesAsync();
+
+                // Desvincular las entidades del contexto después de la modificación
+                _ApplicationDbContext.Entry(rol).State = EntityState.Detached;
+                _ApplicationDbContext.Entry(antiguoRol).State = EntityState.Detached;
+
+                await CargarRoles();
+                StateHasChanged();
+            */
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Editar rol", "El rol siguiente no se encontró");
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Editar rol", "El rol es el de menor categoría");
+            StateHasChanged();
+        }     
+
+    }
+
+    private async void NewRol()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await DialogService.Show<NuevoRol>("Nuevo rol",parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            await CargarRoles();            
+            StateHasChanged();
+        }
+    }
+
+    private async void EliminarRol(Rol rol)
+    {
+        var result = await DialogService.ShowMessageBox("Eliminar rol", "¿Seguro que quieres eliminar este rol?", "Si", "No");
+        if (result is true)
+        {
+            if (rol != null)
+            {
+                // Nos aseguramos de elimnar la misma instancia de Rol que está siendo rastreada por el contexto de la base de datos.
+                var rolRastreado = _ApplicationDbContext.Roles.Find(rol.Id);
+                if (rolRastreado != null)
+                {
+                    int o = rolRastreado.Orden;
+
+                    // Eliminamos el rol rastreado por el contexto de la base de datos
+                    _ApplicationDbContext.Roles.Remove(rolRastreado);
+                    var rols = _ApplicationDbContext.Roles.Where(it => it.Orden > o).ToList();
+                    foreach (var rol1 in rols)
+                    {
+                        rol1.Orden--;
+                    }
+                    _ApplicationDbContext.UpdateRange(rols);
+                    await _ApplicationDbContext.SaveChangesAsync();
+                }
+            }
+        }
+        await CargarRoles();
+        StateHasChanged();
+    }
+
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            Cargando = false;
+            StateHasChanged();
+            await CargarRoles();
+        }
+
+    }
+
+    
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(NavigationManager.Uri);
+        Uri basePath = new Uri(NavigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async Task CargarRoles()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        lstRoles = ctx.Roles.OrderBy(it => it.Orden).AsNoTracking().ToList();
+    }
+
+    private async void EditRol(Rol rol)
+    {
+        if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+            var parameters = new DialogParameters();
+            parameters.Add("rol", rol);
+            //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+
+            var dialog = await DialogService.Show<NuevoRol>("Editar rol", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                rol.PorcentajeConversion = decimal.Round(rol.PorcentajeConversion, 2);
+                await CargarRoles();
+                await Layout.RecargaMainLayout();
+                StateHasChanged();
+            }
+        }
+    }
+
+}

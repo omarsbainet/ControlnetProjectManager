@@ -1,0 +1,544 @@
+﻿@using Controlnet_Project_Manager.Shared.Model
+@using Controlnet_Project_Manager.Pages.Proyectos
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Microsoft.AspNetCore.Identity;
+@using System.Security.Claims;
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore;
+@using Controlnet_Project_Manager.Data;
+@using System.Reflection;
+@using System.ComponentModel;
+
+@inject UserManager<CPMUser> _UserManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
+@inject ApplicationDbContext _ApplicationDbContext
+@inject CRUD Crud
+@inject NavigationManager _navigationManager
+@inject MyCustomTheme tema;
+
+<style>
+    .toolbar {
+        padding: 15px;
+        height: 25px;
+        width: 100%;
+        justify-content: center;
+        background-color: @tema.Theme.Palette.Primary;
+    }
+    .toolbarDark{
+        padding: 15px;
+        height: 25px;
+        width: 100%;
+        justify-content: center;
+        background-color: @tema.Theme.PaletteDark.Primary;
+    }
+
+    .custom-tab {
+        width: @(1200/(cantidadComponentes??1))px;
+    }
+
+</style>
+
+<MudToolBar Class="@(Layout.esModoNocturno() ? "toolbarDark" : "toolbar")">
+    <MudText Color="Color.Secondary" Typo="Typo.h5">@Proyecto.Nombre</MudText>
+    <MudIconButton Icon=@icon OnClick="Vista" Color="Color.Secondary"></MudIconButton>
+</MudToolBar>
+
+<MudTabs Centered="true" Color="Color.Primary">
+    @if (!Cargando)
+    {
+        @if (menuRol != null)
+        {
+
+            @if (AccesoIncidencia)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.BugReport" Text="Incidencias" BadgeColor="Color.Error" BadgeData="@countIncidenciaAdmin">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Incidencia.KanbanIncidencias ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Incidencia.KanbanIncidencias>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Incidencia.ListaIncidencia ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoDesarrollo)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.Build" Text="Desarrollo" BadgeData="@countDesarrolloAdmin" BadgeColor="Color.Success">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Desarrollo.KanbanDesarrollos ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Desarrollo.KanbanDesarrollos>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Desarrollo.ListaDesarrollo ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoComentarios)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.Comment" Text="Peticiones" BadgeColor="Color.Warning" BadgeData="@countIncidencia">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Peticiones.KanbanPeticiones ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Peticiones.KanbanPeticiones>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Peticiones.ListaPeticiones ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoInformacion)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.CalendarMonth" Text="Información">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            <Controlnet_Project_Manager.Pages.Informacion.Informacion ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" proyecto="@Proyecto" />
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoCalendario)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.CalendarToday" Text="Calendario" BadgeColor="Color.Primary">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            <Controlnet_Project_Manager.Pages.Calendario.Calendario ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                        
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @*
+            <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.BusinessCenter" Text="Repositorio">
+                <ChildContent>
+                    @if (!LoadingNewProyect)
+                    {
+                        <Repositorio proyecto="@Proyecto" />
+                    }
+                    else
+                    {
+                        <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                            <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                        </div>
+                    }
+                </ChildContent>
+            </MudTabPanel>*@
+            @*<MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.AccessTime" Text="@(Crud.esEntrada ? "Check-Out" : "Check-In")" BadgeDot="true" BadgeColor="@(Crud.esEntrada ? Color.Success : Color.Error)">
+                <ChildContent>
+                    @if (!LoadingNewProyect)
+                    {
+                        <ControlCheckin ProyectoSelect="@Proyecto.Nombre" OnBadgeColor="HandleBadgeColorChange" usuario="usuario" />
+                    }
+                    else
+                    {
+                        <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                            <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                        </div>
+                    }
+                </ChildContent>
+    </MudTabPanel>*@
+        }
+        else
+        {
+            @if (AccesoIncidencia)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.BugReport" Text="Incidencias" BadgeColor="Color.Error" BadgeData="@countIncidencia">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Incidencia.KanbanIncidencias ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Incidencia.KanbanIncidencias>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Incidencia.ListaIncidencia ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoDesarrollo)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.Build" Text="Desarrollo" BadgeData="@countDesarrollo" BadgeColor="Color.Success">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Desarrollo.KanbanDesarrollos ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Desarrollo.KanbanDesarrollos>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Desarrollo.ListaDesarrollo ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+
+            @if (AccesoInformacion)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.CalendarMonth" Text="Información">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            <Controlnet_Project_Manager.Pages.Informacion.Informacion ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" proyecto="@Proyecto" />
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @if (AccesoComentarios)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.Comment" Text="Peticiones" BadgeColor="Color.Warning" BadgeData="@countIncidencia">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            @if (!vistaLista)
+                            {
+                                <Controlnet_Project_Manager.Pages.Peticiones.KanbanPeticiones ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()"></Controlnet_Project_Manager.Pages.Peticiones.KanbanPeticiones>
+                            }
+                            else
+                            {
+                                <Controlnet_Project_Manager.Pages.Peticiones.ListaPeticiones ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                            }
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            
+            @if (AccesoCalendario)
+            {
+                <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.CalendarToday" Text="Calendario" BadgeColor="Color.Primary">
+                    <ChildContent>
+                        @if (!LoadingNewProyect)
+                        {
+                            <Controlnet_Project_Manager.Pages.Calendario.Calendario ProyectoSelect="@Proyecto.Nombre" id="@Proyecto.Id.ToString()" />
+                        
+                        }
+                        else
+                        {
+                            <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                                <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                            </div>
+                        }
+                    </ChildContent>
+                </MudTabPanel>
+            }
+            @*
+            <MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.BusinessCenter" Text="Repositorio">
+                <ChildContent>
+                    @if (!LoadingNewProyect)
+                    {
+                        <Repositorio proyecto="@Proyecto" />
+                    }
+                    else
+                    {
+                        <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                            <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                        </div>
+                    }
+                </ChildContent>
+            </MudTabPanel>
+            *@
+
+            @*<MudTabPanel Class="custom-tab" Icon="@Icons.Material.Filled.AccessTime" Text="@(Crud.esEntrada ? "Check-Out" : "Check-In")" BadgeDot="true" BadgeColor="@(Crud.esEntrada ? Color.Success : Color.Error)">
+                <ChildContent>
+                    @if (!LoadingNewProyect)
+                    {
+                        <ControlCheckin ProyectoSelect="@Proyecto.Nombre" OnBadgeColor="HandleBadgeColorChange" usuario="usuario" />
+                    }
+                    else
+                    {
+                        <div style="display: flex; justify-items: center;align-items: center;justify-content: center">
+                            <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+                        </div>
+                    }
+                </ChildContent>
+    </MudTabPanel>*@
+        }
+    }
+</MudTabs>
+
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    // instancia de ultimo checkincheckout del usuario activo
+    private CheckinCheckout ultimoCheckinCheckout;
+    int? cantidadComponentes = null;
+    private int? countIncidenciaAdmin;
+    private int? countDesarrolloAdmin;
+    private int? countIncidencia;
+    private int? countDesarrollo;
+
+    private int? countPeticiones;
+    private string icon = @Icons.Material.Filled.ViewColumn;
+
+    // control del BadgeColor
+    private bool EsEntrada;
+    [Parameter]
+    public Proyecto Proyecto { get; set; }
+
+    [Parameter]
+    public CPMUser usuario { get; set; }
+
+    [Parameter]
+    public bool LoadingNewProyect { get; set; }
+
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    private IDbContextFactory<ApplicationDbContext> _dbFactory { get; set; }
+    private bool Cargando = true;
+    private bool AccesoIncidencia = false;
+    private bool AccesoDesarrollo = false;
+    private bool AccesoInformacion = false;
+    private bool AccesoComentarios = false;
+    private bool AccesoCalendario = false;
+
+    bool vistaLista = true;
+
+    private void Vista()
+    {
+        vistaLista = !vistaLista;
+        if (vistaLista)
+        {
+            icon = @Icons.Material.Filled.ViewColumn;
+        }
+        else
+        {
+            icon = @Icons.Material.Filled.ViewList;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Cargando = false;
+            usuario = Layout.usuario;
+
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            var cantidad = 0;
+            AccesoIncidencia = await comprobarAccesoIncidencia();
+            if (AccesoIncidencia) cantidad++;
+            AccesoDesarrollo = await comprobarAccesoDesarrollo();
+            if (AccesoDesarrollo) cantidad++;
+            AccesoInformacion = await comprobarAccesoInformacion();
+            if (AccesoInformacion) cantidad++;
+            AccesoComentarios = await comprobarAccesoComentarios();
+            if (AccesoComentarios) cantidad++;
+            AccesoCalendario = await comprobarAccesoCalendario();
+            if (AccesoCalendario) cantidad++;
+            cantidadComponentes = cantidad;
+
+            Proyecto = await _ApplicationDbContext.Proyectos.Include(it => it.Desarrollos).ThenInclude(it => it.EstadoDesarrollo).Include(it => it.Incidencias).ThenInclude(it => it.EstadoIncidencia).FirstOrDefaultAsync(p => p.Id == Proyecto.Id);
+            //AccesoInformacion = await Crud.AccesoInformacionProyecto(usuario);
+            ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+            EsEntrada = ultimoCheckinCheckout?.Entrada == true;
+
+            countIncidenciaAdmin = Proyecto.Incidencias?.Count(it => it.EstadoIncidencia?.Notificar == true) ?? 0;
+            countDesarrolloAdmin = Proyecto.Desarrollos?.Count(it => it.EstadoDesarrollo?.Notificar == true) ?? 0;
+            countIncidencia = Proyecto.Incidencias?.Count(it => it.EstadoIncidencia?.Notificar == true && it.UsuarioAsignado?.Id == usuario.Id) ?? 0;
+            countDesarrollo = Proyecto.Desarrollos?.Count(it => it.EstadoDesarrollo?.Notificar == true && it.UsuarioAsignado?.Id == usuario.Id) ?? 0;
+            countPeticiones = Proyecto.Peticiones?.Count(it => it.Desarrollo?.EstadoDesarrollo.Notificar == true||it.Incidencia?.EstadoIncidencia.Notificar == true) ?? 0;
+
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            //await OnInitializedAsync();
+        }
+    }
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        await OnInitializedAsync();
+        await base.OnParametersSetAsync();
+    }
+
+    // evento control cambio de estado ControlChekin.razor para color del Badge
+    private void HandleBadgeColorChange(bool colorChanged)
+    {
+        EsEntrada = colorChanged;
+    }
+
+    // obtener el ultimo registro del usuario
+    private async Task<CheckinCheckout> ObtenerUltimoCheckinCheckout()
+    {
+        var ultimoCheckin = await _ApplicationDbContext.CheckinCheckouts
+            .Where(c => c.Usuario == usuario)
+            .OrderByDescending(c => c.Fecha)
+            .FirstOrDefaultAsync();
+
+        return ultimoCheckin;
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        int indiceBarra = relativeUri.IndexOf('/');
+        string nombreUrl = relativeUri.Substring(0, indiceBarra);
+        return nombreUrl;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+
+    private async Task<bool> comprobarAccesoIncidencia()
+    {
+        MenuRol idMenuIncidencia = await Crud.GetMenuRol((int)MenuEnum.Incidencias, usuario);
+        
+        if (idMenuIncidencia != null)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private async Task<bool> comprobarAccesoDesarrollo()
+    {
+        MenuRol idMenuDesarrollo = await Crud.GetMenuRol((int)MenuEnum.Desarrollo, usuario);
+        
+        if (idMenuDesarrollo != null)
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private async Task<bool> comprobarAccesoInformacion()
+    {
+        MenuRol idMenuInformacion = await Crud.GetMenuRol((int)MenuEnum.Informacion, usuario);
+
+        if (idMenuInformacion != null)
+        {
+            return true;
+        }
+        return false;
+    }
+    
+    private async Task<bool> comprobarAccesoComentarios()
+    {
+        MenuRol idMenuInformacion = await Crud.GetMenuRol((int)MenuEnum.Peticiones, usuario);
+
+        if (idMenuInformacion != null)
+        {
+            return true;
+        }
+        return false;
+    }
+    private async Task<bool> comprobarAccesoCalendario()
+    {
+        MenuRol idMenuInformacion = await Crud.GetMenuRol((int)MenuEnum.Calendario, usuario);
+
+        if (idMenuInformacion != null)
+        {
+            return true;
+        }
+        return false;
+    }
+}

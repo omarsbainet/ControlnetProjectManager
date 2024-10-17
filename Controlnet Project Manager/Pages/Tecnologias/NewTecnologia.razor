@@ -1,0 +1,94 @@
+﻿@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@inject ApplicationDbContext _ApplicationDbContext
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="@form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper>
+                        <MudTextField @bind-Value="Tecnologia.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width: 60%"/>
+                        <MudColorPicker Label="Color" @bind-Text="Tecnologia.Color" Required="true" RequiredError="Debe indicar color" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Tecnologia Tecnologia { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = {};
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (Tecnologia == null)
+        {
+            Tecnologia = new Tecnologia();
+            Tecnologia.EstaActivo = true;
+        }
+
+        if (Tecnologia.Id != 0 && Tecnologia.Id != null)
+        {
+            Tecnologia = _ApplicationDbContext.Tecnologias.FirstOrDefault(u => u.Id == Tecnologia.Id);
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Tecnologia).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try {
+
+                if (Tecnologia.Id != 0 && Tecnologia.Id != null)
+                {
+                    _ApplicationDbContext.Tecnologias.Update(Tecnologia);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(Tecnologia.Nombre) && Tecnologia.Color != null)
+                    {
+                        _ApplicationDbContext.Tecnologias.Add(Tecnologia);
+                    }
+                    else if (string.IsNullOrEmpty(Tecnologia.Nombre))
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre de la tecnología es obligatorio.");
+                        return;
+                    }
+                    else if (string.IsNullOrEmpty(Tecnologia.Color))
+                    {
+                        await DialogService.ShowMessageBox("Error", "El color de la tecnología es obligatorio.");
+                        return;
+                    }
+
+                }
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<Tecnologia>(Tecnologia));
+
+            } catch(Exception e)
+            {
+                await DialogService.ShowMessageBox("Error", e.Message);
+            }
+        }
+    }
+
+}

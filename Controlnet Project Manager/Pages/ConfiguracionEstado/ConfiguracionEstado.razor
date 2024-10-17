@@ -1,0 +1,404 @@
+﻿@page "/Estados"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using System.Reflection;
+@using System.ComponentModel;
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject IDialogService DialogService
+
+@{
+    List<Button> botones = new List<Button>()
+    {
+        new ActionButton { Text = "Nuevo Estado",  OnClick = NewProDialog , Icon = @Icons.Material.Filled.Add }
+    };
+}
+@if (!Cargando)
+{
+    @if (menuRol != null)
+    {
+        @if (menuRol.Crear)
+        {
+            <ToolBar Title="ESTADOS" ButtonsLeft="botones"></ToolBar>
+        }
+        else
+        {
+            <ToolBar Title="ESTADOS"></ToolBar>
+        }
+        <br />
+        <br />
+
+        <MudDataGrid @ref="@_grid" Items="@FiltrarEstado()" T="Estado" RowClick="@((x)=>EditEstadoDialog(x.Item))" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15">
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Estados</MudText>
+
+                <MudSpacer />
+                <MudSpacer />
+                <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense"
+                              Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+                </MudTextField>
+            </ToolBarContent>
+
+            <Columns>
+                @*Represantacion De los Datos de los estados*@
+                <PropertyColumn T="Estado" TProperty="string" Property="x=> x.Nombre" Title="Nombre" />
+                <TemplateColumn Sortable="false" Title="Oculto">
+                    <CellTemplate>
+                                            <span @onclick:stopPropagation="true">
+
+                        <MudTooltip Text="Activar/Desactivar">
+                            <MudSwitch T="bool" Checked="@context.Item.Oculto" ThumbIcon="@(context.Item.Oculto ? Icons.Material.Filled.Done : Icons.Material.Filled.Close)" ThumbIconColor="@(context.Item.Oculto ? Color.Success : Color.Error)" CheckedChanged="(e) => { if (menuRol != null && menuRol.Editar) Ocultar(e, context.Item); }" />
+                        </MudTooltip>
+                        </span>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false" Title="Color">
+                    <CellTemplate>
+                        <div style="width: 20px; height: 20px; background-color: @context.Item.Color"></div>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false">
+                    <CellTemplate>
+                    @if (menuRol.Editar)
+                    {
+                        @*Editar Estado*@
+                        <MudTooltip Text="Mover arriba">
+                                <MudIconButton Icon="@Icons.Material.Filled.MoveUp" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" Disabled="@EsPrimerElemento(context.Item)" OnClick="@(() => MoverArriba(context.Item))"></MudIconButton>
+                        </MudTooltip>
+                        <MudTooltip Text="Mover abajo">
+                                <MudIconButton Icon="@Icons.Material.Filled.MoveDown" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" Disabled="@EsUltimoElemento(context.Item)" OnClick="@(() => MoverAbajo(context.Item))"></MudIconButton>
+                        </MudTooltip>
+                        <MudTooltip Text="Editar Estado">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" OnClick="@((e) => { EditEstadoDialog(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    @if (menuRol.Eliminar)
+                    {
+                        <MudTooltip Text="Eliminar">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary:Color.Primary)" OnClick="@((e) => { EliminarEstado(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    </CellTemplate>
+                </TemplateColumn>
+                
+            </Columns>
+            @*    //Paginacion*@
+            <PagerContent>
+                <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+            </PagerContent>
+        </MudDataGrid>
+
+
+        <MudDialog @bind-IsVisible="@_uploadInProgress">
+            <DialogContent>
+                <MudText Typo="Typo.h6" Align="Align.Center">Cargando Proyectos...</MudText>
+                <br />
+                <MudProgressLinear Value="@progress" Striped="true" Size="Size.Medium" Buffer="true" BufferValue="@progressBuffer" />
+                <br />
+                <MudText Align="Align.Center">@progressText</MudText>
+            </DialogContent>
+        </MudDialog>
+    }
+    else if (menuRol == null)
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <ToolBar Title="ESTADOS"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    public Estado estados { get; set; }
+    Stack<Estado> navegacionEstado = new Stack<Estado>();
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    string _searchString = "";
+    public CPMUser usuario { get; set; }
+    List<Estado> lstEstado = new List<Estado>();
+    private bool botonArribaHabilitado = true;
+    private bool botonAbajoHabilitado = true; // Añadido para controlar la habilitación del botón mover abajo
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+
+    private MudDataGrid<Estado> _grid;
+
+    private int _selectedPage;
+
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    private List<Estado> FiltrarEstado()
+    {
+        return lstEstado.FindAll(it =>
+            (it.Nombre != null && it.Nombre.ToUpper().Contains(_searchString.ToUpper())));
+
+    }
+    private async Task Ocultar(bool? oculto, Estado estado)
+    {
+        if (oculto != null)
+        {
+            estado.Oculto = oculto.Value;
+            _ApplicationDbContext.Estados.Update(estado);
+            _ApplicationDbContext.SaveChanges();
+        }
+        await Layout.CargarProyectos();
+        StateHasChanged();
+    }
+
+    private async Task<List<Estado>> cargarEstados()
+    {
+        //await using var ctx = await DbFactory.CreateDbContextAsync();
+        lstEstado = await _ApplicationDbContext.Estados.OrderBy(e => e.Orden).ToListAsync();
+        int num = 0;
+
+        lstEstado.ForEach((estado) =>
+        {
+            estado.Orden = num;
+            num++;
+        });
+        return lstEstado;
+    }
+
+    void limpiarNavegacion()
+    {
+        navegacionEstado.Clear();
+        navegacionEstado.Push(estados);
+        StateHasChanged();
+    }
+
+    void volverAtras()
+    {
+        navegacionEstado.Pop();
+        StateHasChanged();
+    }
+
+    private async Task VerProyecto(Estado est)
+    {
+        navegacionEstado.Push(_ApplicationDbContext.Estados.FirstOrDefault(u => u.Id == est.Id));
+        await cargarEstados();
+        StateHasChanged();
+    }
+
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            Cargando = false;
+            navegacionEstado.Push(estados);
+            await cargarEstados();
+            _selectedPage = 0;
+            StateHasChanged();
+        }
+
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async void NewProDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<NewEstado>("Nuevo estado", parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            await cargarEstados();
+            StateHasChanged();
+        }
+        else
+        {
+            return;
+        }
+
+
+    }
+
+    private async void EliminarEstado(Estado est)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar estado", "¿Seguro que quieres eliminar el estado?", "Si", "No");
+        est = _ApplicationDbContext.Estados.FirstOrDefault(it => it.Id == est.Id);
+
+        if (result is true && est != null)
+        {
+
+            _ApplicationDbContext.Estados.Remove(est);
+            await _ApplicationDbContext.SaveChangesAsync();
+
+        }
+
+        _ApplicationDbContext.Estados.OrderBy(it => it.Id).ToList();
+        await cargarEstados();
+        StateHasChanged();
+
+    }
+
+    //Editar un estado
+    private async Task EditEstadoDialog(Estado est)
+    {
+        if (menuRol != null && menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+            var parameters = new DialogParameters();
+            parameters.Add("Estado", est);
+            // parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+
+
+            var dialog = await _dialogService.Show<NewEstado>("Editar estado", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                await cargarEstados();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task MoverArriba(Estado est)
+    {
+        int indice = lstEstado.IndexOf(est);
+
+        if (indice > 0)
+        {
+            var estadoAnterior = lstEstado[indice - 1];
+            if (estadoAnterior != null)
+            {
+                estadoAnterior.Orden++;
+                est.Orden--;
+                _ApplicationDbContext.Estados.Update(est);
+                _ApplicationDbContext.Estados.Update(estadoAnterior);
+                await _ApplicationDbContext.SaveChangesAsync();
+                await cargarEstados();
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Editar rol", "El rol es el de mayor categoría");
+            }
+        }
+
+        // Deshabilitar el botón si el elemento es el primero de la lista
+        botonArribaHabilitado = indice > 0;
+
+        StateHasChanged();
+    }
+
+
+    private async Task MoverAbajo(Estado est)
+    {
+
+        int indice = lstEstado.IndexOf(est);
+        int ultimoIndice = lstEstado.Count - 1;
+
+        if (indice < ultimoIndice)
+        {
+            var siguienteEstado = lstEstado[indice + 1];
+            if (siguienteEstado != null)
+            {
+                siguienteEstado.Orden--;
+                est.Orden++;
+                _ApplicationDbContext.Estados.Update(est);
+                _ApplicationDbContext.Estados.Update(siguienteEstado);
+                await _ApplicationDbContext.SaveChangesAsync();
+                await cargarEstados();
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Editar rol", "El rol es el de la menor categoría");
+            }
+        }
+        botonAbajoHabilitado = indice != ultimoIndice;
+        StateHasChanged();
+    }
+
+    private bool EsPrimerElemento(Estado est)
+    {
+        return lstEstado.IndexOf(est) == 0;
+    }
+
+    private bool EsUltimoElemento(Estado est)
+    {
+        return lstEstado.IndexOf(est) == lstEstado.Count - 1;
+    }
+}

@@ -1,0 +1,329 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using System.Reflection;
+@using System.ComponentModel;
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using Controlnet_Project_Manager.Pages.Desarrollo
+
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+
+<MudDataGrid @ref="@_grid" Items="@desarrolloPadre.Hijos" T="Desarrollo" RowClick="@((x)=>EditDesarrolloDialog(x.Item))"
+                 Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true"
+             Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15" >
+   
+    <Columns>
+        @* Representación de los datos de los desarrollos *@
+        <HierarchyColumn T="Desarrollo" ButtonDisabledFunc="@(x => x.Hijos == null || x.Hijos.Count() == 0)" />
+        <PropertyColumn T="Desarrollo" TProperty="string" Property="x => x.Nombre" Title="Nombre"  />
+        <PropertyColumn T="Desarrollo" TProperty="string" Property="x => GetAutor(x)" Title="Autor" />
+        <TemplateColumn SortBy="x => x.UsuarioAsignado == null ? null : x.UsuarioAsignado.Nombre" >
+            <HeaderTemplate>Programador</HeaderTemplate>
+            <CellTemplate>
+                <span @onclick:stopPropagation="true">
+                    <MudChip Color="Color.Primary"
+                             OnClick="@((e) => {if ((menuRol != null && menuRol.Editar) || context.Item.UsuarioAsignado == null) { EditProgramadorDialog(context.Item);}})">
+                        @if (context.Item.UsuarioAsignado == null)
+                        {
+                            @txtSinProg;
+                        }
+                        else
+                        {
+                            @context.Item.UsuarioAsignado?.Nombre;
+                        }
+
+                    </MudChip>
+                </span>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn SortBy="x => x.EstadoDesarrollo == null ? null : x.EstadoDesarrollo.Nombre">
+            <HeaderTemplate>Estado</HeaderTemplate>
+            <CellTemplate>
+                @{
+                    var color = $"background-color: {context.Item.EstadoDesarrollo?.Color};";
+                }
+                <span @onclick:stopPropagation="true">
+                    <MudChip Color="Color.Primary" Style="@color"
+                             OnClick="@((e) => { if(menuRol != null && (menuRol.Editar || menuRol.Rol.Name.ToUpper() == "CLIENTE" )) EditEstadoDialog(context.Item); })">
+                        @context.Item.EstadoDesarrollo?.Nombre
+                    </MudChip>
+                </span>
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn T="Desarrollo" TProperty="DateTime" Property="x => x.FechaCreacion" Title="Fecha de Creación" Format="dd/MM/yyyy"  />
+        <PropertyColumn T="Desarrollo" TProperty="DateTime" Property="x => x.FechaEntrega" Title="Fecha de Entrega" Format="dd/MM/yyyy" />
+        <PropertyColumn T="Desarrollo" TProperty="DateTime?" Property="x => x.FechaFinalizacion" Title="Fecha de Finalización " Format="dd/MM/yyyy" />
+        <TemplateColumn Sortable="false">
+            <CellTemplate>
+                @*Editar Desarrollo*@
+                <MudButtonGroup VerticalAlign="false" Color="Color.Primary" Variant="Variant.Outlined">
+
+                    <MudTooltip Text="Ver Información">
+                        <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye" Color="Color.Primary" OnClick="@((e) => { InfoDesarrolloDialog(context.Item); })" />
+                    </MudTooltip>
+                    @if (menuRol != null && menuRol.Crear)
+                    {
+                        <MudTooltip Text="Agregar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@((e) => {  NewDesarrolloDialog(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    @if (menuRol != null && menuRol.Editar)
+                    {
+                        <MudTooltip Text="Editar Desarrollo">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@((e) => { EditDesarrolloDialog(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    @if (menuRol != null && menuRol.Eliminar)
+                    {
+                        <MudTooltip Text="Eliminar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@((e) => { EliminarDesarrollo(context.Item); })" />
+                        </MudTooltip>
+                    }
+
+                </MudButtonGroup>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+   
+    <ChildRowContent>
+        @if (context.Item.Hijos != null && context.Item.Hijos.Count() > 0)
+        {
+            <CascadingValue Value="this">
+                <SubDesarrolloLista proyectoPadre="@proyectoPadre" desarrolloPadre="@context.Item" id="@proyectoPadre.Id.ToString()"></SubDesarrolloLista>
+            </CascadingValue>
+           
+        }
+
+    </ChildRowContent>
+
+
+</MudDataGrid>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    [Parameter] public Desarrollo desarrolloPadre { get; set; }
+    [Parameter] public Proyecto proyectoPadre { get; set; }
+    private MudDataGrid<Desarrollo> _grid;
+    private int _selectedPage;
+    private List<Desarrollo> lstDesarrollo = new List<Desarrollo>();
+    private MenuRol menuRol = null;
+    string txtSinProg = "Sin asignar";
+    public CPMUser usuario { get; set; }
+    public Desarrollo desarrollo { get; set; }
+    [Parameter] public string id { get; set; }
+    [Parameter] public EventCallback<int> OnCountDesarrollo { get; set; }
+    [CascadingParameter] public ListaDesarrollo listaDesarrollo{ get; set; }
+    [CascadingParameter] public SubDesarrolloLista SubListaDesarrollo { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        try
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                usuario = Layout.usuario;
+
+                //url = GetLastSegmentUrl();
+                //idMenu = GetIdMenu(url);
+                menuRol = await Crud.GetMenuRol((int)MenuEnum.Desarrollo, usuario);
+            }
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+    private async Task EditDesarrolloDialog(Desarrollo des)
+    {
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+        var parameters = new DialogParameters();
+        parameters.Add("desarrollo", des);
+        parameters.Add("proyecto", proyectoPadre);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<NewDesarrollo>("Editar Desarrollo", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            // Si FinalizacionDesarrollo está activo, establecer la FechaFinalizacion
+            if (des.EstadoDesarrollo.FinalizacionDesarrollo)
+            {
+                des.FechaFinalizacion = DateTime.Now;
+                _ApplicationDbContext.Desarrollos.Update(des);
+                _ApplicationDbContext.SaveChanges();
+            }
+
+            await CargarDesarrolloPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+
+    }
+    private async Task CargarDesarrolloPorProyecto(Proyecto pro)
+    {
+        try
+        {
+            lstDesarrollo = await _ApplicationDbContext.Desarrollos
+            .Include(it => it.EstadoDesarrollo)
+            .Include(it => it.Proyecto)
+            .Include(it => it.Autor)
+            .Where(desarrollo => desarrollo.Proyecto.Id == pro.Id)
+            .ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarDesarrolloPorProyecto(pro);
+        }
+    }
+    public string GetAutor(Desarrollo d)
+    {
+        return d?.Autor?.Nombre ?? "";
+    }
+    private async Task EditProgramadorDialog(Desarrollo des)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("desarrollo", des);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        parameters.Add("usuario", usuario);
+        parameters.Add("proyecto", proyectoPadre);
+        parameters.Add("allow", menuRol != null);
+        var dialog = await _dialogService.Show<EditProgramador>("Asignar programador", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            await CargarDesarrolloPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+    }
+    private async Task EditEstadoDialog(Desarrollo des)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("desarrollo", des);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<EditEstadoDesarrollo>("Editar estado", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            // Si FinalizacionDesarrollo está activo, establecer la FechaFinalizacion
+            if (des.EstadoDesarrollo.FinalizacionDesarrollo)
+            {
+                des.FechaFinalizacion = DateTime.Now;
+                _ApplicationDbContext.Desarrollos.Update(des);
+                _ApplicationDbContext.SaveChanges();
+            }
+            await CargarDesarrolloPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+    }
+    private async void InfoDesarrolloDialog(Desarrollo des)
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        parameters.Add("desarrollo", des);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<InfoDesarrollo>("Ver Información del Desarrollo", parameters, options).Result;
+    }
+    private async void NewDesarrolloDialog(Desarrollo padre)
+    {
+
+        if (desarrollo == null)
+        {
+            desarrollo = new Desarrollo();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                desarrollo.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", desarrollo.Proyecto);
+                parameters.Add("desarrollopadre", padre);
+                //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+                var dialog = await _dialogService.Show<NewDesarrollo>("Nuevo desarrollo", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarDesarrolloPorProyecto(proyectoPadre);
+                    OnCountDesarrollo.InvokeAsync(await _ApplicationDbContext.Desarrollos.Where(it => it.Proyecto.Id == projectId && it.EstadoDesarrollo.Nombre == "Pendiente").CountAsync());
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                Console.WriteLine("ID de desarrollo no válida");
+                return;
+            }
+        }
+
+
+    }
+    private async void EliminarDesarrollo(Desarrollo des)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar desarrollo", "¿Seguro que quieres eliminar desarrollo?", "Si", "No");
+        des = _ApplicationDbContext.Desarrollos.FirstOrDefault(it => it.Id == des.Id);
+
+        if (result is true && des != null)
+        {
+            desarrolloPadre.Hijos.Remove(des);
+            _ApplicationDbContext.Desarrollos.Update(desarrolloPadre);
+
+            if (des.Hijos != null && des.Hijos.Count() != 0)
+            {
+                foreach (Desarrollo hijo in des.Hijos)
+                {
+                    _ApplicationDbContext.Desarrollos.Remove(hijo);
+                }
+            }
+            _ApplicationDbContext.Desarrollos.Remove(des);
+            await _ApplicationDbContext.SaveChangesAsync();
+            await listaDesarrollo.CargarDesarrolloPorProyecto(proyectoPadre);
+            if(SubListaDesarrollo != null)
+            {
+                await SubListaDesarrollo.CargarDesarrolloPorProyecto(proyectoPadre);
+            }
+            
+
+        }
+
+        _ApplicationDbContext.EstadosDesarrollos.OrderBy(it => it.Id).ToList();
+        if (int.TryParse(id, out int projectId))
+        {
+            OnCountDesarrollo.InvokeAsync(await _ApplicationDbContext.Desarrollos.Where(it => it.Proyecto.Id == projectId && it.EstadoDesarrollo.Nombre == "Pendiente").CountAsync());
+        }
+        await CargarDesarrolloPorProyecto(proyectoPadre);
+        StateHasChanged();
+
+    }
+}

@@ -1,0 +1,732 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+   @using Controlnet_Project_Manager.Shared
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject ApplicationDbContext _ApplicationDbContext
+
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject CRUD _crud
+@inject MyCustomTheme tema;
+
+
+
+<style >
+
+    body {
+        background: @(Layout.esModoNocturno() ? "#000000" : $"{tema.Theme.Palette.Background}");
+    }
+
+    .mud-paper {
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        text-align: center;
+    }
+
+    .mud-typography-subtitle {
+        font-size: 1.0rem;
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: bold;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+    .mud-input-label-outlined {
+        transform: translate(14px, 20px) scale(1);
+        pointer-events: none;
+        padding: 0 5px !important;
+    }
+
+    .mud-toolbar {
+        --mud-internal-toolbar-height: 15%;
+    }
+
+    .titulo-estado {
+        font-size: 1.0rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+        height: 60px;
+        color: white;
+        background-color: @tema.Theme.Palette.Primary;
+    }
+
+    .titulo-estado-dark {
+        font-size: 1.0rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+        height: 60px;
+        color: white;
+        background-color: @tema.Theme.PaletteDark.Primary;
+    }
+
+    .mud-paper {
+        font-size: 0.8rem;
+        text-align: left;
+    }
+
+    .floating-button {
+        position: fixed;
+        bottom: 20px;
+    }
+
+    .text-task {
+        font-size: 0.8rem;
+        color: #90A4AE;
+    }
+
+    .text-task-black {
+        font-size: 0.8rem;
+        color: #000;
+    }
+    .text-task-modoOscuro{
+        font-size: 0.8rem;
+        color: #fff;
+    }
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+    .separador {
+        margin: 2px 0;
+    }
+
+    .cuadro-proyecto {
+        padding: 15px;
+        background-color: white;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.1);
+    }
+    .cuadro-proyecto-dark{
+        padding: 15px;
+        background-color: @tema.Theme.PaletteDark.Primary;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.1);
+    }
+
+    .cuadro-incidencia .cuadro-desarrollo {
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .cell-template {
+        border: 1px solid @tema.Theme.Palette.Primary;
+        color: @tema.Theme.Palette.Primary;
+        background-color: @tema.Theme.Palette.Background;
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: 5px;
+    }
+
+    .cell-template-dark {
+        border: 1px solid @tema.Theme.PaletteDark.Primary;
+        color: @tema.Theme.PaletteDark.Primary;
+        background-color: @tema.Theme.PaletteDark.Background;
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: 5px;
+    }
+
+    .mud-drop-zone {
+        overflow-y: scroll;
+        position: relative;
+        transition: all 300ms
+    }
+
+
+
+</style>
+@if (Cargando)
+{
+
+     <div style="display: flex; justify-content: center; align-items: center; padding-top: 200px">
+         <MudProgressCircular Color="Color.Dark" Size="Size.Large" Indeterminate="true" />
+    </div>
+
+} 
+else
+{
+
+    Layout.OnCheckinChanged = FuncionDePrueba;
+
+
+
+<MudToolBar DisableGutters="true" Class="d-flex align-center justify-center" Style="@((Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; padding: 0 10px; justify-content: center;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; background-color: {tema.Theme.Palette.Primary.ToString()}; padding: 0 10px; justify-content: center;" ))">
+        <h4 style="color: white; margin: 0;">Bienvenido @usuario.Nombre </h4>
+    </MudToolBar>
+
+        <br />
+        <br />
+
+        <div style="display: flex; justify-content: space-between;">
+            <MudDropContainer T="Proyecto" Class="d-flex flex-row" Style="width:25%">
+                <ChildContent>
+                    @if (FiltrarEstado().Any())
+                    {
+                        var item = FiltrarEstado().FirstOrDefault(e => e.Name == "EN PROGRESO");
+                        ColorStatus colorStatus = _color.FirstOrDefault(c => c.Name == item.Name);
+                        string customBorderClass = "border-top: 5px solid " + colorStatus.ColorHeader;
+                        string customBackground = "background-color: " + colorStatus.ColorBackground;
+
+                    <MudPaper Elevation="8" Width="100%">
+                            <MudDropZone T="KanbanTaskItem" Identifier="@item.Name" Style="margin: 5px;">
+                                <MudText Typo="Typo.subtitle2" Class="@(Layout.esModoNocturno() ? "titulo-estado-dark" : "titulo-estado")">Tareas Pendientes</MudText><br />
+
+                                @foreach (var proyecto in listaProyectos)
+                                {
+                                    var incidenciasProyecto = listaIncidencias.Where(it => it.Proyecto.Id == proyecto.Id).ToList();
+
+                                    var desarrollosProyecto = listaDesarrollo.Where(it => it.Proyecto.Id == proyecto.Id).ToList();
+
+                                    <div class="@(Layout.esModoNocturno() ? "cuadro-proyecto-dark" : "cuadro-proyecto")" style="border-left: 5px solid @colorStatus.ColorHeader;">
+                                    <h5 style="@(Layout.esModoNocturno() ? "text-align: center;color:white;" : "text-align: center;")" class="titulo-proyecto">@proyecto.Nombre</h5>
+
+                                        @if (incidenciasProyecto != null && incidenciasProyecto.Any())
+                                        {
+                                        <h6 style="@(Layout.esModoNocturno() ? "text-decoration: underline; text-align:left; padding-top:5px;color:white" : "text-decoration: underline; text-align:left; padding-top:5px;")">Incidencias:</h6>
+                                            @foreach (var incidencia in incidenciasProyecto)
+                                            {
+                                                <div class="cuadro-incidencia">
+                                                    <div class="cuadro-content">
+                                                    <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                            <span class="text-task">Nombre:</span> @incidencia.Nombre
+                                                        </span><br />
+                                                    <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                            <MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                            <span class="text-task">Estado:</span> @incidencia.EstadoIncidencia.Nombre
+                                                        </span><br />
+                                                    <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                            <span class="text-task">Fecha de Cerrada:</span> @(incidencia.FechaCerrada?.ToString() ?? "N/A")
+                                                        </span><br />
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+
+                                        @if (desarrollosProyecto != null && desarrollosProyecto.Any())
+                                        {
+                                            <h6 style="text-decoration: underline; text-align:left;padding-top:5px;">Desarrollo:</h6>
+                                            @foreach (var desarrollo in desarrollosProyecto)
+                                            {
+                                                <div class="cuadro-desarrollo">
+                                                <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                        <span class="text-task">Nombre:</span> @desarrollo.Nombre
+                                                    </span><br />
+                                                <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Build" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                        <span class="text-task">Estado:</span> @(desarrollo.EstadoDesarrollo != null ? desarrollo.EstadoDesarrollo.Nombre : "N/A")
+                                                    </span><br />
+                                                <span class="@(Layout.esModoNocturno() ? "text-task-modoOscuro" : "text-task-black" )">
+                                                        <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" Class="mr-1"></MudIcon>
+                                                        <span class="text-task">Fecha de Entrega:</span> @($"{desarrollo.FechaEntrega.ToShortDateString()}")
+                                                    </span><br />
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                                @*
+                    <div>
+                    <MudText>
+                    Estás trabajando en
+                    @if(ultimoRegistro.Entrada) {
+
+                    @ultimoRegistro.Proyecto.Nombre;
+                    @ultimoRegistro.Fecha
+                    }</MudText>
+                    </div>*@
+                            </MudDropZone>
+                        </MudPaper>
+
+                    }
+                </ChildContent>
+            </MudDropContainer>
+
+            <MudDialog @bind-IsVisible="@_uploadInProgress">
+                <DialogContent>
+                    <MudText Typo="Typo.h6" Align="Align.Center">Cargando Pagina Estados Proyecto.</MudText>
+                    <br />
+                    <MudProgressLinear Value="@progress" Striped="true" Buffer="true" BufferValue="@progressBuffer" />
+                    <br />
+                    <MudText Align="Align.Center">@progressText</MudText>
+                </DialogContent>
+            </MudDialog>
+
+            <div style="display: flex; justify-content: space-between; width:70%;">
+                <MudTotalCalendar Values="BuildTotals()" Color="Color.Primary" Items="_items">
+                    <CellTemplate>
+                        <div class="@((Layout.esModoNocturno() ? "cell-template-dark" : "cell-template"))">
+                        <div style="@(Layout.esModoNocturno() ? "text-align: center; font-weight: bold;color:white" : "text-align: center; font-weight: bold")">
+                                @context.Text
+                            </div>
+                            <div style="display: flex; flex-direction: column;">
+                                @foreach (var proyecto in ((HoraItem)context).Proyectos)
+                                {
+                                <div style="@(Layout.esModoNocturno() ? "text-align:center; color:white" : "text-align:center;")">
+                                        @{
+                                            var horas = ((HoraItem)context).Hora;
+                                            var horasSolo = (int)horas;
+                                            var minutos = (int)(horas * 60) % 60;
+
+                                            <span>@(horasSolo) h @(minutos) min</span>
+                                        }
+
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </CellTemplate>
+
+                    <TotalTemplate>
+                        <div style="@((Layout.esModoNocturno() ? $"background-color: {tema.Theme.PaletteDark.Primary.ToString()};border: white" : ""))">
+                            @{
+                                var horas = context.Amount;
+
+                            var horasSolo = (int)horas;
+                            var minutos = (int)(horas * 60) % 60;
+                            <div style="display: inline;color:white">
+                                @(horasSolo) h @(minutos)
+                            </div>
+                        }
+                        <div style="display: inline; font-size: 16px;"> min</div>
+                    </div>
+                </TotalTemplate>
+            </MudTotalCalendar>
+        </div>
+    </div>
+ 
+}
+
+
+@code {
+    //Variables
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    bool? allow;
+    bool? esAdmin;
+    Stack<CPMUser> navegacionUsuarios = new Stack<CPMUser>();
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    private bool IsChecked;
+    List<Proyecto> lstProyecto = new List<Proyecto>();
+    public Proyecto proyecto { get; set; }
+    public Estado estado { get; set; }
+    public EstadoProyectoUsuario estadoProyectoUsuario { get; set; }
+    public Cliente cliente { get; set; }
+    public CPMUser usuario { get; set; }
+    private List<String> _selectedClientes = new List<String>();
+    private List<String> _selectedEstados = new List<String>();
+    private List<KanBanSections> _sections = new List<KanBanSections>();
+    private List<Estado> _estados = new List<Estado>();
+    private List<Proyecto> proyectos = new List<Proyecto>();
+    private List<HoraItem> _items = new List<HoraItem>();
+    private int horasTotales = 0;
+    private bool Cargando = true;
+    public string id { get; set; }
+    List<Controlnet_Project_Manager.Areas.Identity.Data.Desarrollo> listaDesarrollo = new();
+    List<Controlnet_Project_Manager.Areas.Identity.Data.Incidencia> listaIncidencias = new();
+    List<Controlnet_Project_Manager.Areas.Identity.Data.Proyecto> listaProyectos = new();
+    //public CheckinCheckout ultimoRegistro;
+    protected override async Task OnInitializedAsync()
+    {
+
+        try
+        {
+
+
+            await Task.Delay(1000);
+            usuario = Layout.usuario;
+            StateHasChanged();
+            listaProyectos = await cargarProyectos();
+            await cargarSection();
+            listaDesarrollo = await cargarDesarrollo();
+            listaIncidencias = await cargarIncidencias();
+
+
+
+            await CalcularHorasTotales();
+
+            proyecto = await _ApplicationDbContext.Proyectos.Include(p => p.Cliente).FirstOrDefaultAsync();
+            _selectedEstados = _sections.Where(s => _tasks.Any(t => t.Status == s.Name)).Select(s => s.Name).ToList();
+            Cargando = false;
+
+            StateHasChanged();
+
+
+
+
+
+
+        } catch (Exception e)
+        {
+            Console.WriteLine("ERROR: " + e.Message);
+        }
+
+    }
+
+
+
+
+    public class ColorStatus
+    {
+        public string Name { get; set; }
+        public string ColorHeader { get; set; }
+        public string ColorBackground { get; set; }
+
+        public ColorStatus(string name, string colorHeader, string colorBackground)
+        {
+            Name = name;
+            ColorHeader = colorHeader;
+            ColorBackground = colorBackground;
+        }
+    }
+    private List<ColorStatus> _color = new();
+
+    public class KanBanSections
+    {
+        public string Name { get; init; }
+        public bool NewTaskOpen { get; set; }
+        public string NewTaskName { get; set; }
+        public bool IsChecked { get; set; }
+
+        public KanBanSections(string name, bool newTaskOpen, string newTaskName, bool isChecked)
+        {
+            Name = name;
+            NewTaskOpen = newTaskOpen;
+            NewTaskName = newTaskName;
+            IsChecked = isChecked;
+        }
+    }
+
+    public class KanbanTaskItem
+    {
+        public int Id { get; init; }
+        public string Name { get; init; }
+        public string Status { get; set; }
+        public DateTime FechaPrevistaContrato { get; set; }
+        public DateTime FechaPrevistaEntrega { get; set; }
+        public int HorasEstimadas { get; set; }
+        public string Cliente { get; set; }
+
+        public KanbanTaskItem(int id, string name, string status, DateTime fechaPrevistaContrato, DateTime fechaPrevistaEntrega, int horasEstimadas, string cliente)
+        {
+            Id = id;
+            Name = name;
+            Status = status;
+            FechaPrevistaContrato = fechaPrevistaContrato;
+            FechaPrevistaEntrega = fechaPrevistaEntrega;
+            HorasEstimadas = horasEstimadas;
+            Cliente = cliente;
+        }
+    }
+
+    private List<KanbanTaskItem> _tasks = new();
+
+    public class KanbanClientes
+    {
+        public int Id { get; init; }
+        public string Nombre { get; init; }
+
+        public KanbanClientes(int id, string nombre)
+        {
+            Id = id;
+            Nombre = nombre;
+        }
+    }
+    private List<KanbanClientes> _clientes = new List<KanbanClientes>();
+
+    private async Task cargarSection()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        _estados = _estados = ctx.Estados.OrderBy(e => e.Orden).ToList();
+
+        var usuario = Layout.usuario;
+
+        _sections = _estados
+            .Select(estado =>
+            {
+                var estadoUsuario = ctx.EstadoProyectoUsuarios
+                                     .Where(eu => eu.Usuario.Id == usuario.Id).FirstOrDefault(eu => eu.Estado.Id == estado.Id);
+                if (estadoUsuario != null)
+                {
+                    IsChecked = estadoUsuario.isChecked;
+                }
+                else
+                {
+                    IsChecked = false;
+                }
+
+                return new KanBanSections(
+                    estado.Nombre,
+                    false,
+                    String.Empty,
+                    IsChecked
+                    );
+
+            }).ToList();
+
+        _color = _estados.Select(estado => new ColorStatus(
+                                                    estado.Nombre,
+                                                    estado.Color,
+                                                    LightenColor(estado.Color)
+                                                           )).ToList();
+
+
+
+    }
+    private async Task<List<Controlnet_Project_Manager.Areas.Identity.Data.Proyecto>> cargarProyectos()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        return  await ctx.Proyectos
+    .Where(p =>
+        (p.Incidencias.Any(i => i.UsuarioAsignado.Id == usuario.Id && i.EstadoIncidencia.Notificar) ||
+         p.Desarrollos.Any(d => d.UsuarioAsignado.Id == usuario.Id && d.EstadoDesarrollo.Notificar)))
+    .ToListAsync();
+
+    }
+
+    private async Task<List<Controlnet_Project_Manager.Areas.Identity.Data.Desarrollo>> cargarDesarrollo()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        return await ctx.Desarrollos.Include(it=> it.EstadoDesarrollo).Include(it=> it.Proyecto).Where(it=> it.UsuarioAsignado == usuario && it.EstadoDesarrollo.Notificar).ToListAsync();
+    }
+
+    private async Task<List<Controlnet_Project_Manager.Areas.Identity.Data.Incidencia>> cargarIncidencias()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        return await ctx.Incidencias.Include(it => it.EstadoIncidencia).Include(it => it.Proyecto).Where(it => it.UsuarioAsignado == usuario && it.EstadoIncidencia.Notificar).ToListAsync();
+    }
+
+
+
+
+    private List<KanBanSections> FiltrarEstado()
+    {
+        return _sections.Where(it => (!_selectedEstados.Any() || _selectedEstados.Any(s => s == it.Name))).ToList();
+    }
+
+    public static string LightenColor(string colorHex)
+    {
+        if (!colorHex.StartsWith("#") || (colorHex.Length != 7 && colorHex.Length != 9))
+        {
+            throw new ArgumentException("Formato de color hexadecimal no válido.", nameof(colorHex));
+        }
+
+
+        byte r = Convert.ToByte(colorHex.Substring(1, 2), 16);
+        byte g = Convert.ToByte(colorHex.Substring(3, 2), 16);
+        byte b = Convert.ToByte(colorHex.Substring(5, 2), 16);
+        byte a = colorHex.Length == 9 ? Convert.ToByte(colorHex.Substring(7, 2), 16) : (byte)255;
+
+        r = (byte)(r + (255 - r) * 0.8);
+        g = (byte)(g + (255 - g) * 0.8);
+        b = (byte)(b + (255 - b) * 0.8);
+
+        string nuevoColorHex = $"#{r:X2}{g:X2}{b:X2}{a:X2}";
+
+        return nuevoColorHex;
+    }
+
+    private void HandleClick(int Id)
+    {
+        _navigationManager.NavigateTo($"/Proyectos/{Id}", true);
+    }
+
+    private bool CanDrop(KanbanTaskItem item, string column)
+    {
+        return esAdmin.HasValue && esAdmin.Value;
+    }
+
+    private void ToggleSelection(string item, List<String> lista)
+    {
+        if (lista.Contains(item))
+        {
+            lista.Remove(item);
+        }
+        else
+        {
+            lista.Add(item);
+        }
+    }
+
+    private string TextSelection(string item, List<String> lista)
+    {
+        var texto = "";
+
+        if (lista.Count == 0)
+        {
+            texto = item;
+        }
+        else if (lista.Count == 1)
+        {
+            texto = lista.FirstOrDefault();
+        }
+        else
+        {
+            texto = "2 " + item + " o más seleccionados";
+            texto = texto.Substring(0, Math.Min(texto.Length, 25)) + "...";
+        }
+
+        return texto;
+    }
+
+
+
+
+    public class HoraItem : CalendarItem
+    {
+        public double Hora { get; set; }
+        public List<Proyecto> Proyectos { get; set; }  // Agregar esta propiedad
+
+        public HoraItem()
+        {
+            Proyectos = new List<Proyecto>();
+        }
+    }
+    private async Task CalcularHorasTotales()
+    {
+        var proyectosUsuarioIds = await _ApplicationDbContext.CheckinCheckouts
+            .Where(cc => cc.Usuario.Id == usuario.Id)
+            .Select(cc => cc.Proyecto.Id)
+            .Distinct()
+            .ToListAsync();
+
+        Dictionary<(DateTime, int), int> horasPorDiaYProyecto = new Dictionary<(DateTime, int), int>();
+
+        var checkinCheckouts = await _ApplicationDbContext.CheckinCheckouts
+            .Include(it => it.Proyecto)
+            .Where(cc => proyectosUsuarioIds.Contains(cc.Proyecto.Id) && cc.Usuario.Id == usuario.Id)
+            .OrderBy(cc => cc.Fecha)
+            .ToListAsync();
+
+        // Recorremos todos los registros de checkin y checkout para calcular las horas trabajadas
+        for (int i = 0; i < checkinCheckouts.Count; i++)
+        {
+            var registroActual = checkinCheckouts[i];
+
+            if (registroActual.Entrada)
+            {
+                // Si es un checkin, buscamos el siguiente checkout correspondiente
+                var checkoutCorrespondiente = checkinCheckouts.FirstOrDefault(cc =>
+                    !cc.Entrada && cc.Proyecto.Id == registroActual.Proyecto.Id && cc.Fecha > registroActual.Fecha);
+
+                if (checkoutCorrespondiente != null)
+                {
+                    var segundosTrabajados = (int)(checkoutCorrespondiente.Fecha - registroActual.Fecha).TotalSeconds;
+                    if (segundosTrabajados > 15 * 3600) segundosTrabajados = 15 * 3600;
+
+                    var fecha = registroActual.Fecha.Date;
+                    var proyectoId = registroActual.Proyecto.Id;
+
+                    var key = (fecha, proyectoId);
+                    if (!horasPorDiaYProyecto.ContainsKey(key))
+                    {
+                        horasPorDiaYProyecto[key] = 0;
+                    }
+                    horasPorDiaYProyecto[key] += segundosTrabajados;
+                }
+            }
+        }
+
+        // Limpiamos la lista _items antes de agregar nuevos elementos
+        _items.Clear();
+
+        // Convertimos las horas trabajadas en objetos HoraItem y los agregamos a la lista _items
+        foreach (var kvp in horasPorDiaYProyecto)
+        {
+            var proyectoId = kvp.Key.Item2;
+            var proyecto = await _ApplicationDbContext.Proyectos.FirstOrDefaultAsync(p => p.Id == proyectoId);
+            if (proyecto != null)
+            {
+                var nueva = new HoraItem
+                    {
+                        Start = kvp.Key.Item1,
+                        Text = proyecto.Nombre,
+                        Hora = ((double)(kvp.Value)) / (double)3600,
+                        Proyectos = new List<Proyecto> { proyecto }
+                    };
+
+                _items.Add(nueva);
+            }
+        }
+
+        // Actualizamos el estado para reflejar los cambios en el calendario
+        StateHasChanged();
+    }
+
+
+
+    private List<Value> BuildTotals()
+    {
+        var hora = new ValueDefinition
+            {
+                Name = "Horas",
+                Units = "h",
+                FormatString = "",
+                Style = "background-color: #009ee0; color: #ffffff; text-align: center; font-size: 18px"
+            };
+
+        // Agrupar los elementos por día y proyecto
+        var groupedItems = _items.GroupBy(item => new { item.Start.Date, item.Text });
+
+        var totals = new List<Value>();
+        foreach (var group in groupedItems)
+        {
+            var totalHours = (Double)group.Sum(item => item.Hora);
+            if (group.Key.Date.Day == 16)
+            {
+
+                Console.WriteLine("");
+            }
+
+            var value = new Value { Date = group.Key.Date, Definition = hora, Amount = totalHours };
+            totals.Add(value);
+        }
+
+        return totals;
+    }
+
+
+
+    private void FuncionDePrueba()
+    {
+        OnInitializedAsync();
+    }
+
+
+}

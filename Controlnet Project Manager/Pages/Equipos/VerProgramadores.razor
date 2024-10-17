@@ -1,0 +1,198 @@
+﻿@* @page "/Equipos/VerProgramadores" *@
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+@using Color = MudBlazor.Color
+@using System.ComponentModel.DataAnnotations
+@using System.Text.RegularExpressions
+@using System.Reflection;
+@using System.ComponentModel;
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _userManager
+@inject IDialogService _dialogService;
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+@inject CRUD Crud
+@inject NavigationManager NavigationManager
+
+
+<MudDialog>
+    <DialogContent>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <MudText Typo="Typo.h6">Lista de Programadores</MudText>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AgregarProgramador">Agregar Programador</MudButton>
+        </div>
+        <MudDataGrid @ref="@_grid" Items="@FiltrarProgramadores()" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="15">        
+            <Columns>
+                <PropertyColumn T="ProgramadoresEquipos" TProperty="string" Property="x=> x.Programador.Nombre" Title="Nombre del programador" />
+                @if (menuRol != null && menuRol.Eliminar)
+                {
+                    <TemplateColumn CellClass="d-flex justify-end" Sortable="false">
+                        <CellTemplate>
+                            <MudTooltip Text="Eliminar">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@(() => EliminarProgramador(context.Item))"></MudIconButton>
+                            </MudTooltip>
+                        </CellTemplate>
+                    </TemplateColumn>
+                }
+            </Columns>
+        </MudDataGrid>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    [Parameter] public List<ProgramadoresEquipos> lstProgramadoresEquipos { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public CPMUser usuario { get; set; }
+    [Parameter] public Equipo equipo { get; set; }
+    [Parameter] public List<CPMUser> Programadores { get; set; }
+
+    string _searchString = "";
+    private MenuRol menuRol = null;
+    private int idMenu = 0;
+    private string url = "";
+    private MudDataGrid<ProgramadoresEquipos> _grid;    
+    public ProgramadoresEquipos programadoresEquipos { get; set; }    
+    List<EquiposProyecto> lstEquiposProyectos = new List<EquiposProyecto>();
+    List<CPMUser> lstProgramadores = new List<CPMUser>();
+    Stack<ProgramadoresEquipos> navegacionUsuarios = new Stack<ProgramadoresEquipos>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        //var idUsuario = _httpContextAccessor.HttpContext.Session.GetString("idUsuario") ?? (await _userManager.GetUserAsync(_httpContextAccessor.HttpContext.User))?.Id;
+        //var usuarioSession = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == idUsuario);
+
+        usuario = Layout.usuario;
+
+        url = GetLastSegmentUrl();
+        idMenu = GetIdMenu(url);
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        lstProgramadoresEquipos = _ApplicationDbContext.ProgramadoresEquipos.Where(it => it.Equipo.Id == equipo.Id).ToList();
+    }
+
+    private List<ProgramadoresEquipos> FiltrarProgramadores()
+    {
+        return lstProgramadoresEquipos.FindAll(it =>
+             it.Programador != null && it.Programador.Nombre != null && it.Programador.Nombre.ToUpper().Contains(_searchString.ToUpper()));      
+    }
+
+    async Task CargarDatosAsync()
+    {
+        if (programadoresEquipos != null)
+        {         
+            lstProgramadoresEquipos = await _ApplicationDbContext.ProgramadoresEquipos
+                .Include(pe => pe.Programador)
+                .Include(pe => pe.Equipo)
+                .Where(pe => pe.Equipo.Id == programadoresEquipos.Equipo.Id)
+                .ToListAsync();
+        }
+    }
+
+    void limpiarNavegacion()
+    {
+        navegacionUsuarios.Clear();
+        navegacionUsuarios.Push(programadoresEquipos);
+        StateHasChanged();
+    }
+
+    void volverAtras()
+    {
+        navegacionUsuarios.Pop();
+        StateHasChanged();
+    }
+
+    void Cerrar()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private async void EliminarProgramador(ProgramadoresEquipos pro)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar programador", "¿Seguro que quieres eliminar este programador?", "Si", "No");
+
+        if (result == true)
+        {
+            _ApplicationDbContext.ProgramadoresEquipos.Remove(pro);
+            await _ApplicationDbContext.SaveChangesAsync();
+            lstProgramadoresEquipos.Remove(pro); 
+        }
+        _ApplicationDbContext.ProgramadoresEquipos.OrderBy(it => it.Id).ToList();
+        StateHasChanged();
+    }
+
+    private async Task AgregarProgramador()
+    {        
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+        parameters.Add("Equipo", equipo);
+        MudDialog.Title = equipo.Nombre;
+        var dialog = await _dialogService.Show<NewProgramador>("Nuevo programador", parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            var nuevoProgramador = (ProgramadoresEquipos)dialog.Data;
+            lstProgramadoresEquipos.Add(nuevoProgramador);
+            StateHasChanged();
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+
+
+    //Obtener la url del menu
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(NavigationManager.Uri);
+        Uri basePath = new Uri(NavigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    //Obtener el id del menu
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+}

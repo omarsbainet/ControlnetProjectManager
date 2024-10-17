@@ -1,0 +1,1135 @@
+﻿@page "/VistaTrabajo"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor;
+@using System.Diagnostics
+@using System.ComponentModel
+@using System.Reflection
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService DialogService
+@inject ApplicationDbContext _ApplicationDbContext
+@inject CRUD Crud
+@inject NavigationManager _navigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+
+@inject MyCustomTheme tema;
+<style>
+
+    .progress-container {
+        width: 65%;
+        background-color: lightgray;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .progress-bar {
+        height: 12px;
+        background-color: @tema.Theme.Palette.Primary;
+        text-align: center;
+        line-height: 20px;
+        border-radius: 8px;
+    }
+    .progress-bar-dark{
+        height: 12px;
+        background-color: @tema.Theme.PaletteDark.Primary;
+        text-align: center;
+        line-height: 20px;
+        border-radius: 8px;
+    }
+
+    body {
+        background: @(layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Background}" : $"{tema.Theme.Palette.Background}");
+    }
+
+    .mud-paper {
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        text-align: center;
+    }
+
+    .mud-typography-subtitle {
+        font-size: var(--mud-typography-subtitle2-size);
+        font-family: var(--mud-typography-subtitle2-family);
+        font-weight: var(--mud-typography-subtitle2-weight);
+        letter-spacing: var(--mud-typography-subtitle2-letterspacing);
+        text-transform: var(--mud-typography-subtitle2-text-transform);
+    }
+
+    .mud-input-label-outlined {
+        transform: translate(14px,20px) scale(1);
+        pointer-events: none;
+        padding: 0 5px !important;
+    }
+
+    .mud-toolbar {
+        --mud-internal-toolbar-height: 15%;
+    }
+
+    .titulo-estado {
+        font-size: 1.0rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center; 
+        width: 100%; 
+        height: 60px;
+    }
+
+    .mud-paper {
+        font-size: 0.8rem;
+        text-align: left;
+    }
+
+    .floating-button {
+        position: fixed;
+        bottom: 20px;
+    }
+
+    .text-task {
+        font-size: 0.8rem;
+        color: #90A4AE;
+    }
+
+    .text-task-black {
+        font-size: 0.8rem;
+        color: #000;
+    }
+
+    .titulo-proyecto {
+        font-size: 18px;
+        color: #000;
+    }
+
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+</style>
+
+<MudToolBar DisableGutters="true"   Style="@((layout.esModoNocturno() ? $"height: 26px; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; display: flex; align-items: center; justify-content: center;" : $"height: 26px; background-color: {tema.Theme.Palette.Primary.ToString()}; display: flex; align-items: center; justify-content: center;"))">
+        <MudText Typo="Typo.h5" Style="color: white;">Visor de Trabajadores</MudText>
+    </MudToolBar>
+
+
+
+<MudToolBar DisableGutters="true" Class="d-flex" Style="@((layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; padding: 0 10px; justify-content: flex-end;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.Palette.Primary.ToString()}; padding: 0 10px; justify-content: flex-end;"))">
+    @if (menuRol != null)
+    {
+        <div style="width: 48%; flex-direction: row; display: flex; align-items: center; margin-right: auto">
+            <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))" OnClick="@OpenDialog">
+                <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                    @labelFecha
+                </div>
+                <div style="position: absolute; right: 5px; bottom: 8px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Event"/>
+                </div>
+            </MudChip>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center; margin-right: 10%">
+            <MudMenu AnchorOrigin="Origin.TopCenter" TransformOrigin="Origin.BottomCenter" Class="mud-menu-custom" MaxHeight="409">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @MostrarTextoSeleccionadoProgramadores()
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1"/>
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    <!-- Agregar campo de búsqueda -->
+                    <div style="padding: 5px;">
+                        <MudTextField @bind-Value="textoBusqueda"
+                                      Margin="Margin.Dense"
+                                      Placeholder="Buscar..."
+                                      Label="Buscar programador"
+                                      Variant="Variant.Outlined"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Adornment="Adornment.Start"
+                                      Immediate="true"
+                                      @onkeyup="BuscarProgramador"/>
+                    </div>
+                    <!-- Filtrar y mostrar elementos según la búsqueda -->
+                    @foreach (var programador in programadoresFiltrados)
+                    {
+                        var isChecked = programadoresFiltroSeleccionados.Contains(programador);
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@programador" @onclick="@(() => ToggleSeleccionProgramador(programador, programadoresFiltroSeleccionados))"/>
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+
+        <div style="width: 37%; flex-direction: row; display: flex; align-items: end; margin-left: 320px">
+            <MudCheckBox Color="Color.Secondary" T="bool" @onclick="@(() => CambiarMostrar())">
+                <span style="color: white">Mostrar Todos</span>
+            </MudCheckBox>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center; margin-left: 5px">
+            <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @MostrarTextoSeleccionadoClientes()
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1"/>
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var cliente in clientes)
+                    {
+                        var isChecked = clientesSeleccionados.Contains(cliente);
+
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@cliente" @onclick="@(() => ToggleSeleccionCliente(cliente, clientesSeleccionados))"/>
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+            <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @MostrarTextoSeleccionadoEstados()
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1"/>
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var estado in estados)
+                    {
+                        var isChecked = estadosSeleccionados.Contains(estado);
+
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado" @onclick="@(() => ToggleSeleccionEstado(estado, estadosSeleccionados))"/>
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+    }
+</MudToolBar>
+
+<br />
+
+@if (cargando)
+{
+    <div style="display: flex; justify-content: center; align-items: center;">
+        <MudProgressCircular Color="Color.Dark" Size="Size.Large" Indeterminate="true" />
+    </div>
+}
+else{
+
+if (menuRol != null)
+{
+<br />
+
+<MudGrid>
+    <div style="display:flex; flex-wrap: wrap; margin:auto; width:100%">
+        @foreach (var proyecto in proyectosFiltrados)
+        {
+            var horasTotales = calculo(proyecto.Id).Sum(c=>c.Horas);
+            if (!isDateSet)
+            {
+                horasTotales = calculo(proyecto.Id).Sum(c => c.Horas);
+            }
+            var estiloMud = "padding:8px;height:100%; margin: 10px; border-top: 7px solid " + proyecto.Estado.Color;
+            <MudItem md="3" Style="margin-bottom:15px">
+                <MudPaper Style="@estiloMud">
+                    <!-- Aclarar color estado proyecto-->
+                    <div style="background-color: rgba(@GetR(proyecto.Estado.Color), @GetG(proyecto.Estado.Color), @GetB(proyecto.Estado.Color), 0.4);padding:10px">
+                        <h3 style="@(layout.esModoNocturno() ? "color:white" : "")">@proyecto.Nombre</h3>
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="d-flex">
+                                    <MudIcon Icon="@Icons.Material.Filled.ViewList" Size="Size.Medium" Color="@(layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" />
+                                    <b style="@(layout.esModoNocturno() ? "color:white;margin-top:5px" : "margin-top:5px" )">&nbsp;@proyecto.Estado.Nombre</b>
+                                </div>
+                                <div class="d-flex">
+                                    <MudIcon Icon="@Icons.Material.Filled.BusinessCenter" Color="@(layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Size="Size.Medium" />
+                                    <b style="@(layout.esModoNocturno() ? "color:white;margin-top:5px" : "margin-top:5px" )">&nbsp;@proyecto.Cliente?.Nombre</b>
+                                </div>
+                            </div>
+                            <div>
+                                <h6 style="@(layout.esModoNocturno() ? "margin-top:3px; font-size:1em; color:white" : "margin-top:3px; font-size:1em;")">Horas totales: @horasTotales</h6>
+                                <h6 style="@(layout.esModoNocturno() ? "margin-top:3px; font-size:1em; color:white" : "margin-top:3px; font-size:1em;")">Horas estimadas: @proyecto.HorasEstimadas</h6>
+                                <h6 style="@(layout.esModoNocturno() ? "margin-top:3px; font-size:1em; color:white" : "margin-top:3px; font-size:1em;")">Horas Semanales estimadas: @proyecto.HorasSemanalesEstimadas</h6>
+                            </div>
+                        </div>
+
+                            </div>
+                            @if (!isDateSet) // si la fecha no está puesta
+                            {
+
+                                @foreach (var resultados in checkins)
+                                {
+                                    @if (resultados.Proyecto.Id == proyecto.Id && resultados.Entrada == true)
+                                    {
+
+                                        bool repetidoDesarrollo = false;
+                                        bool repetidoIncidencias = false;
+
+                                <div class="align-items-center" style="padding:5px;margin:5px; border-left: 5px solid @proyecto.Estado.Color; border-radius: 4px">
+                                    <div class="d-flex">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircleOutline" Size="Size.Medium" Color="@(layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" />
+                                        <MudText><b style="@(layout.esModoNocturno() ? "color:white" : "")">&nbsp;@resultados.Usuario.Nombre</b></MudText>
+                                    </div>
+
+                                    @foreach (var t in tareasAsignadas)
+                                    {
+                                        if (t.UsuarioAsignado != null && t.Proyecto.Id == proyecto.Id && resultados.Usuario.Id == t.UsuarioAsignado.Id)
+                                        {
+                                            if (!repetidoDesarrollo)
+                                            {
+                                                repetidoDesarrollo = true;
+                                                <MudText Style="Color:darkgray;font-size:14px">Desarrollos:</MudText>
+                                            }
+                                            <MudText Style="@(layout.esModoNocturno() ? "color:white;font-size: 13px;padding-left:5px" : "color:black;font-size: 13px;padding-left:5px")">@t.Nombre</MudText>
+                                        }
+                                    }
+
+                                    @foreach (var i in incidenciasAsignadas)
+                                    {
+                                        if (i.UsuarioAsignado != null && i.Proyecto.Id == proyecto.Id && resultados.Usuario.Id == i.UsuarioAsignado.Id)
+                                        {
+                                            if (!repetidoIncidencias)
+                                            {
+                                                repetidoIncidencias = true;
+                                                <MudText Style="Color:darkgray;font-size:14px">Incidencias:</MudText>
+                                            }
+                                            <MudText Style="@(layout.esModoNocturno() ? "color:white;font-size: 13px;padding-left:5px" : "color:black;font-size: 13px;padding-left:5px")">@i.Nombre</MudText>
+                                        }
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                    else
+                    {
+                        
+                        var horasUsuarios = calculo(proyecto.Id);
+                        var horasTotales = calculoTotal();
+
+                                @foreach (var horas in horasUsuarios)
+                                {
+
+                                    foreach (var totales in horasTotales)
+                                    {
+
+                                        if (horas.Usuario.Id == totales.Usuario.Id)
+                                        {
+
+                                            if (programadoresFiltroSeleccionados.Count() > 0 && programadoresFiltroSeleccionados.Contains(horas.Usuario.Nombre))
+                                            {
+                                                var porcentaje = CalculoPorcentaje(horas.Usuario.Nombre, horas.Horas);
+                                                <div class="align-items-center" style="padding:5px;margin:8px; border-left: 5px solid @proyecto.Estado.Color; border-radius: 4px">
+                                                    <MudText><b>@horas.Usuario.Nombre</b></MudText>
+                                                    <MudText>Horas invertidas en este proyecto: @horas.Horas </MudText>
+
+                                            <MudGrid Class="d-flex align-items-center">
+                                                <MudItem xs="12" sm="8" Class="d-flex align-items-center">
+                                                    <div class="progress-container" style="width: 100%;">
+                                                        <div class="@(layout.esModoNocturno() ? "progress-bar-dark" : "progress-bar")" style="width: @porcentaje%"></div>
+                                                    </div>
+                                                </MudItem>
+                                                <MudItem xs="12" sm="4" Class="d-flex align-items-center">
+                                                    <MudText>@porcentaje%</MudText>
+                                                </MudItem>
+                                            </MudGrid>
+
+                                                    <MudText>Horas invertidas en total: @totales.Horas </MudText>
+                                                </div>
+                                            }
+                                            else if (programadoresFiltroSeleccionados.Count() == 0 && !horas.Usuario.Nombre.Equals("Admin"))
+                                            {
+                                                var porcentaje = CalculoPorcentaje(horas.Usuario.Nombre, horas.Horas);
+                                                <div class="align-items-center" style="padding:5px;margin:8px; border-left: 5px solid @proyecto.Estado.Color; border-radius: 4px">
+                                                    <MudText><b>@horas.Usuario.Nombre</b></MudText>
+                                                    <MudText>Horas invertidas en este proyecto: @horas.Horas </MudText>
+
+                                            <MudGrid Class="d-flex align-items-center">
+                                                <MudItem xs="12" sm="8" Class="d-flex align-items-center">
+                                                    <div class="progress-container" style="width: 100%;">
+                                                        <div class="@(layout.esModoNocturno() ? "progress-bar-dark" : "progress-bar")" style="width: @porcentaje%"></div>
+                                                    </div>
+                                                </MudItem>
+                                                <MudItem xs="12" sm="4" Class="d-flex align-items-center">
+                                                    <MudText>@porcentaje%</MudText>
+                                                </MudItem>
+                                            </MudGrid>
+
+                                                    <MudText>Horas invertidas en total: @totales.Horas </MudText>
+                                                </div>
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        </MudPaper>
+                    </MudItem>
+                }
+            </div>
+        </MudGrid>
+    }
+    else
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+<br />
+
+
+
+@code {
+    // Método para obtener el componente rojo (R) de un color hexadecimal
+    int GetR(string colorHex) => Convert.ToInt32(colorHex.Substring(1, 2), 16);
+
+    // Método para obtener el componente verde (G) de un color hexadecimal
+    int GetG(string colorHex) => Convert.ToInt32(colorHex.Substring(3, 2), 16);
+
+    // Método para obtener el componente azul (B) de un color hexadecimal
+    int GetB(string colorHex) => Convert.ToInt32(colorHex.Substring(5, 2), 16);
+
+    List<string> nombresMostrados = new List<string>();
+    List<Proyecto> proyectos = new List<Proyecto>();
+    List<ProgramadoresProyecto> programadoresP = new List<ProgramadoresProyecto>();
+
+    List<Desarrollo> tareasAsignadas = new List<Desarrollo>();
+    List<Incidencia> incidenciasAsignadas = new List<Incidencia>();
+    List<CheckinCheckout> checkins = new List<CheckinCheckout>(); 
+    List<CheckinCheckout> checkinsPorRangoFecha = new List<CheckinCheckout>();
+    List<string> clientes = new List<string>();
+    List<string> estados = new List<string>();
+
+    List<Proyecto> proyectosFiltrados = new List<Proyecto>();
+
+    List<string> lista = new List<string>();
+    List<string> estadosSeleccionados = new List<string>();
+    List<string> clientesSeleccionados = new List<string>();
+    HashSet<string> programadoresFiltro = new();
+    List<string> programadoresFiltroSeleccionados = new List<string>();
+
+    private bool cargando = true;
+
+    public bool CheckMostrarVacios { get; set; } = false;
+    List<string> listaProgramadoresFiltrados = new List<string>();
+    public bool CheckSeleccionProgramador { get; set; } = false;
+    public bool CheckSeleccionCliente { get; set; } = false;
+    public bool CheckSeleccionEstado { get; set; } = false;
+    [CascadingParameter]
+    public MainLayout layout { get; set; }
+
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    public CPMUser usuario { get; set; }
+
+
+    private int CalculoPorcentaje(string Usuario, int Horas)
+    {
+
+        var horasTotales = calculoTotal();
+        foreach (var h in horasTotales)
+        {
+            if (h.Usuario.Nombre == Usuario)
+            {
+                double porcentaje = ((double)Horas / h.Horas) * 100;
+                // Condicion para controlar el error de % negativo
+                if((int)porcentaje<0)
+                {
+                    return 0;
+                }
+                return (int)porcentaje;
+            }
+        }
+
+        return 0;
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await obtenerUsuario();
+        url = GetLastSegmentUrl();
+        idMenu = GetIdMenu(url);
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        await SeleccionarEstados();
+        await CargarProyectos(); //en este punto salta el error al cargar la vista
+        await CargarClientesYEstados();
+        await cargarCheckins(null, null);
+        cargarListadoProgramadores();
+        FiltrarMostrarInicio();
+        cargando = false;
+    }
+
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    // Método para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async Task CargarProyectos()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        proyectos = await ctx.Proyectos.Include(p => p.Estado).Include(p => p.Programadores).Include(p => p.Cliente).ToListAsync();
+        programadoresP = await ctx.ProgramadoresProyectos.Include(it => it.Programador).Include(it => it.Proyecto).ToListAsync();
+        tareasAsignadas = await ctx.Desarrollos.Include(p => p.EstadoDesarrollo).Include(p => p.Proyecto).Include(p => p.UsuarioAsignado).Where(p => p.EstadoDesarrollo.Nombre != "TERMINADO").ToListAsync();
+        incidenciasAsignadas = await ctx.Incidencias.Include(p => p.Proyecto).Include(p => p.UsuarioAsignado).Include(p => p.EstadoIncidencia).Where(p => p.EstadoIncidencia.Nombre != "TERMINADO").ToListAsync();
+
+        //checkins = await ctx.CheckinCheckouts.Include(p => p.Proyecto).Include(p => p.Usuario).ThenInclude(p => p.Rol).GroupBy(p => p.Usuario).Select(p => p.OrderByDescending(c => c.Fecha).FirstOrDefault()).ToListAsync();
+        // Carga solo el primero registro de cada usuario
+
+        //proyectos = proyectos.Where(p => p.Programadores.Any(pp => programadoresFiltro.Contains(pp.Programador.Nombre))).ToList(); No funciona
+
+    }
+
+    private async Task CargarClientesYEstados()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        clientes = await ctx.Proyectos.Where(p => p.Cliente != null).Include(p => p.Cliente).Select(p => p.Cliente.Nombre).Distinct().ToListAsync();
+        estados = await ctx.Proyectos.Where(p => p.Estado != null).Include(p => p.Estado).Select(p => p.Estado.Nombre).Distinct().ToListAsync();
+        FiltrarProyectos();
+
+    }
+
+    public class HorasInvertidasPorUsuario
+    {
+        public CPMUser Usuario { get; set; }
+        public int Horas { get; set; }
+        public Proyecto Proyecto { get; set; }
+    }
+
+    public List<HorasInvertidasPorUsuario> calculo(int idProyecto)
+    {
+        var resultado = new List<HorasInvertidasPorUsuario>();
+        var registrosFiltrados = checkinsPorRangoFecha.Where(p => p.Proyecto.Id == idProyecto).GroupBy(c => c.Usuario);
+
+        foreach (var checkin in registrosFiltrados)
+        {
+            double horas = 0;
+            DateTime? ultimoCheckIn = null;
+
+            var lista = checkin.OrderBy(it => it.Fecha).ToList();
+
+            for (int i = 0; i < lista.Count(); i++)
+            {
+                var registroActual = lista[i];
+                if (registroActual.Entrada)
+                {
+                    ultimoCheckIn = registroActual.Fecha;
+                }
+                else if (ultimoCheckIn.HasValue)
+                {
+                    // Comprobar si la entrada y la salida están en el mismo día.
+                    if (ultimoCheckIn.Value.Date == registroActual.Fecha.Date)
+                    {
+                        var diferencia = registroActual.Fecha - ultimoCheckIn.Value;
+                        horas += diferencia.TotalHours * (double)checkin.Key.Rol.PorcentajeConversion;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Check-out sin entrada correspondiente en el mismo día.");
+                    }
+                    ultimoCheckIn = null; // Restablecer para el siguiente ciclo.
+                }
+            }
+
+            var horasInvertidas = new HorasInvertidasPorUsuario
+                {
+                    Usuario = checkin.Key,
+                    Horas = Convert.ToInt32(horas), 
+                    Proyecto = checkin.FirstOrDefault()?.Proyecto
+                };
+            resultado.Add(horasInvertidas);
+        }
+        return resultado;
+    }
+
+
+    public async Task cargarCheckins (DateTime? fechaInicio, DateTime? fechaFin)
+    {
+        if (isDateSet)
+        {
+            await using var ctx = await DbFactory.CreateDbContextAsync();
+
+            checkinsPorRangoFecha = await ctx.CheckinCheckouts
+                               .Include(c => c.Proyecto)
+                               .Include(c => c.Usuario).ThenInclude(u => u.Rol)
+                               .Where(c => c.Fecha >= fechaInicio && c.Fecha <= fechaFin)
+                               .ToListAsync<CheckinCheckout>();
+        }
+        else
+        {
+            await using var ctx = await DbFactory.CreateDbContextAsync();
+
+            checkinsPorRangoFecha = await ctx.CheckinCheckouts
+                                            .Include(c=>c.Proyecto)
+                                           .Include(c => c.Usuario).
+                                           ThenInclude(u => u.Rol)
+                               .ToListAsync<CheckinCheckout>();
+        }
+    }
+
+    public List<HorasInvertidasPorUsuario> calculoTotal()
+    {
+
+        List<HorasInvertidasPorUsuario> horasAcumuladas = new();
+
+        var idsProyecto = checkinsPorRangoFecha.Select(p => p.Proyecto.Id).Distinct().ToList();
+
+        foreach (var idProyecto in idsProyecto)
+        {
+            var horasPorUsuarioPorProyecto = calculo(idProyecto);
+            horasAcumuladas.AddRange(horasPorUsuarioPorProyecto);
+        }
+
+        var horasTotalesPorUsuario = horasAcumuladas
+        .GroupBy(p => p.Usuario)
+        .Select(grupo => new HorasInvertidasPorUsuario
+            {
+                Usuario = grupo.Key,
+                Horas = grupo.Sum(p => p.Horas)
+            }).ToList();
+
+        return horasTotalesPorUsuario; 
+    }
+
+    string MostrarTextoSeleccionadoProgramadores()
+    {
+        if (programadoresFiltroSeleccionados.Count() == 0)
+        {
+            return "Programador";
+        }
+
+        if (programadoresFiltroSeleccionados.Count() == 1)
+        {
+            return programadoresFiltroSeleccionados.First();
+        }
+
+        else
+        {
+            return "2 Programadores o más seleccionados";
+        }
+
+    }
+
+    string MostrarTextoSeleccionadoClientes()
+    {
+        if (clientesSeleccionados.Count() == 0)
+        {
+            return "Cliente";
+        }
+
+        if (clientesSeleccionados.Count() == 1)
+        {
+            return clientesSeleccionados.First();
+        }
+
+        else
+        {
+            return "2 Cliente o más seleccionados";
+        }
+    }
+
+    string MostrarTextoSeleccionadoEstados()
+    {
+        if (estadosSeleccionados.Count() == 0)
+        {
+            return "Estado";
+        }
+
+        if (estadosSeleccionados.Count() == 1)
+        {
+            return estadosSeleccionados.First();
+        }
+
+        else
+        {
+            return "2 Estado o más seleccionados";
+        }
+    }
+    async Task SeleccionarEstados()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        estadosSeleccionados = ctx.Estados.Where(s => !s.Oculto).Select(s => s.Nombre).ToList();
+    }
+
+    private DateTime? startDateTime = DateTime.Today;
+    private DateTime? endDateTime = DateTime.Now.AddDays(1);
+    private bool isDateSet = false;
+    private string labelFecha = "Seleccionar Fecha";
+
+    private async void OpenDialog()
+    {
+        var parameters = new DialogParameters();
+        parameters.Add("dateRange", new DateRange() { Start = startDateTime, End = endDateTime });
+        var options = new DialogOptions { CloseOnEscapeKey = true, CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var result = await (await DialogService.ShowAsync<DateRangePickerDialog>("", parameters, options)).Result;
+
+        if (!result.Canceled)
+        {
+            var dates = (DateRange)result.Data; // puede ser null ; DateTime?
+            if (dates!= null)
+            {
+                startDateTime = dates.Start;
+
+                if (dates.End.HasValue)
+                {
+                    endDateTime = dates.End.Value.AddHours(23).AddMinutes(59).AddSeconds(59); // que recoja el dia entero
+                }
+                else endDateTime = dates.End;
+
+                isDateSet = startDateTime.HasValue && endDateTime.HasValue;
+                await cargarCheckins(startDateTime, endDateTime);
+
+                cargarLabelSelector(isDateSet);
+                cargarListadoProgramadores();
+
+                //FiltrarProyectos();
+                ComprobarMostrar();
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        StateHasChanged();
+
+    }
+
+    private void cargarListadoProgramadores()
+    {
+        programadoresFiltro.Clear();
+        programadoresFiltrados.Clear();
+        foreach (var p in programadoresP)
+        {
+            if (p.Programador is not null && !programadoresFiltrados.Contains(p.Programador.Nombre))
+            {
+                programadoresFiltro.Add(p.Programador.Nombre);
+                programadoresFiltrados.Add(p.Programador.Nombre);
+            }
+        }
+        StateHasChanged(); 
+    }
+
+
+    private void cargarLabelSelector(bool isDateSet)
+    {
+        if (isDateSet)
+        {
+            labelFecha = startDateTime.Value.ToString("dd-MM-yyyy") + " ➤ " + endDateTime.Value.ToString("dd-MM-yyyy");
+        }
+        else
+        {
+            labelFecha = "Seleccionar Fecha";
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+    string textoBusqueda = "";
+
+
+
+
+
+    List<string> programadoresFiltrados = new List<string>();
+
+    void BuscarProgramador(KeyboardEventArgs args)
+    {
+
+        if (String.IsNullOrEmpty(textoBusqueda))
+        {
+            // Si no hay texto, mostrar todos los programadores
+            programadoresFiltrados = new List<string>(programadoresFiltro);
+        }
+        else
+        {
+            // Filtrar los programadores que coincidan con el texto de búsqueda
+            textoBusqueda = textoBusqueda.Trim();
+            programadoresFiltrados = programadoresFiltro.Where(programador => programador.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        StateHasChanged(); // Actualiza la interfaz de usuario para reflejar los cambios
+    }
+
+
+
+    void ToggleSeleccionProgramador(string valorProgramador, List<string> lista) // Se agrega a la lista el valor correspondiente
+    {
+        if (lista.Contains(valorProgramador))
+        {
+            lista.Remove(valorProgramador);
+        }
+        else
+        {
+            lista.Add(valorProgramador);
+        }
+
+        // Según el checkbox seleccionado, llama a ComprobarMostrar()
+        if (lista.Count == 0)
+        {
+            CheckSeleccionProgramador = false;
+            ComprobarMostrar();
+        }
+        else
+        {
+            CheckSeleccionProgramador = true;
+            ComprobarMostrar();
+        }
+    }
+
+    void ToggleSeleccionCliente(string valorCliente, List<string> lista) 
+    {
+        if (lista.Contains(valorCliente))
+        {
+            lista.Remove(valorCliente);
+        }
+        else
+        {
+            lista.Add(valorCliente);
+        }
+
+        // Según el checkbox seleccionado, llama a ComprobarMostrar()
+        if (lista.Count == 0)
+        {
+            CheckSeleccionCliente = false;
+            ComprobarMostrar();
+        }
+        else
+        {
+            CheckSeleccionCliente = true;
+            ComprobarMostrar();
+        }
+    }
+
+    void ToggleSeleccionEstado(string valorEstado, List<string> lista)
+    {
+        if (lista.Contains(valorEstado))
+        {
+            lista.Remove(valorEstado);
+        }
+        else
+        {
+            lista.Add(valorEstado);
+        }
+
+        // Según el checkbox seleccionado, llama a ComprobarMostrar()
+        if (lista.Count == 0)
+        {
+            CheckSeleccionEstado = false;
+            ComprobarMostrar();
+        }
+        else
+        {
+            CheckSeleccionEstado = true;
+            ComprobarMostrar();
+        }
+    }
+
+    async void FiltrarProyectos()
+    {
+        proyectosFiltrados.Clear();
+
+        foreach (var proyecto in proyectos)
+        {
+            bool clienteCoincide = clientesSeleccionados.Count == 0 || (proyecto.Cliente != null && clientesSeleccionados.Contains(proyecto.Cliente.Nombre));
+            bool estadoCoincide = estadosSeleccionados.Count == 0 || (proyecto.Estado != null && estadosSeleccionados.Contains(proyecto.Estado.Nombre));
+
+            bool programadorCoincide = programadoresFiltroSeleccionados.Count == 0;
+
+            if (clienteCoincide && estadoCoincide && programadoresFiltroSeleccionados.Count > 0)
+            {
+                programadorCoincide = false;
+
+                if (!isDateSet) // si el rango de fechas no está establecido
+                {
+                    foreach (var programadorProyecto in proyecto.Programadores)
+                    {
+                        foreach (var checkedIn in checkins)
+                        {
+                            if (programadoresFiltroSeleccionados.Contains(programadorProyecto.Programador.Nombre) && programadorProyecto.Programador.Nombre == checkedIn.Usuario.Nombre && checkedIn.Proyecto.Id == proyecto.Id && checkedIn.Entrada == true)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                else
+                {
+                    @*
+                    foreach (var programadorProyecto in proyecto.Programadores)
+                    {
+                        var horas = calculo(proyecto.Id);
+                        foreach (var h in horas)
+                        {
+                            if (programadoresFiltroSeleccionados.Contains(h.Usuario.Nombre) && h.Proyecto.Id == proyecto.Id)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                    *@
+
+                    foreach (var programador in proyecto.Programadores)
+                    {
+                        foreach (var c in checkinsPorRangoFecha)
+                        {
+                            if (programadoresFiltroSeleccionados.Contains(c.Usuario.Nombre) && c.Proyecto.Id == proyecto.Id)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (clienteCoincide && estadoCoincide && programadorCoincide)
+            {
+                proyectosFiltrados.Add(proyecto);
+            }
+        }
+    }
+
+    async void FiltrarMostrarInicio()
+    {
+        listaProgramadoresFiltrados = new List<string>(programadoresFiltro);
+        
+        proyectosFiltrados.Clear();
+
+        foreach (var proyecto in proyectos)
+        {            
+            bool programadorCoincide = listaProgramadoresFiltrados.Count == 0;
+
+            if (listaProgramadoresFiltrados.Count > 0)
+            {
+                programadorCoincide = false;
+
+                if (!isDateSet) // si el rango de fechas no está establecido
+                {
+                    foreach (var programadorProyecto in proyecto.Programadores)
+                    {
+                        foreach (var checkedIn in checkins)
+                        {
+                            if (listaProgramadoresFiltrados.Contains(programadorProyecto.Programador.Nombre) && programadorProyecto.Programador.Nombre == checkedIn.Usuario.Nombre && checkedIn.Proyecto.Id == proyecto.Id && checkedIn.Entrada == true)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+
+                        }
+
+                    }
+                }
+
+                else
+                {
+                    @*
+                    foreach (var programadorProyecto in proyecto.Programadores)
+                    {
+                        var horas = calculo(proyecto.Id);
+                        foreach (var h in horas)
+                        {
+                            if (listaProgramadoresFiltrados.Contains(h.Usuario.Nombre) && h.Proyecto.Id == proyecto.Id)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+
+                    }
+                    *@
+
+                    foreach (var programador in proyecto.Programadores)
+                    {
+                        foreach (var c in checkinsPorRangoFecha)
+                        {
+                            if (listaProgramadoresFiltrados.Contains(c.Usuario.Nombre) && c.Proyecto.Id == proyecto.Id)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            var horasTotales = calculo(proyecto.Id).Sum(c => c.Horas);
+
+            if (programadorCoincide &&  horasTotales > 0)
+            {
+                proyectosFiltrados.Add(proyecto);
+            }
+        }
+    }
+
+    async void FiltrarMostrarConSeleccionClienteOEstado()
+    {
+        listaProgramadoresFiltrados = new List<string>(programadoresFiltro);
+
+        proyectosFiltrados.Clear();
+
+        foreach (var proyecto in proyectos)
+        {
+            bool clienteCoincide = clientesSeleccionados.Count == 0 || (proyecto.Cliente != null && clientesSeleccionados.Contains(proyecto.Cliente.Nombre));
+            bool estadoCoincide = estadosSeleccionados.Count == 0 || (proyecto.Estado != null && estadosSeleccionados.Contains(proyecto.Estado.Nombre));
+
+            bool programadorCoincide = listaProgramadoresFiltrados.Count == 0;
+
+            if (clienteCoincide && estadoCoincide && listaProgramadoresFiltrados.Count > 0)
+            {
+                programadorCoincide = false;
+
+                if (!isDateSet) // si el rango de fechas no está establecido
+                {
+                    foreach (var programadorProyecto in proyecto.Programadores)
+                    {
+                        foreach (var checkedIn in checkins)
+                        {
+                            if (listaProgramadoresFiltrados.Contains(programadorProyecto.Programador.Nombre) && programadorProyecto.Programador.Nombre == checkedIn.Usuario.Nombre && checkedIn.Proyecto.Id == proyecto.Id && checkedIn.Entrada == true)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                else
+                {
+                    @*
+                foreach (var programadorProyecto in proyecto.Programadores)
+                {
+                    var horas = calculo(proyecto.Id);
+                    foreach (var h in horas)
+                    {
+                        if (listaProgramadoresFiltrados.Contains(h.Usuario.Nombre) && h.Proyecto.Id == proyecto.Id)
+                        {
+                            programadorCoincide = true;
+                            break;
+                        }
+                    }
+
+                }
+                *@
+
+                    foreach (var programador in proyecto.Programadores)
+                    {
+                        foreach (var c in checkinsPorRangoFecha)
+                        {
+                            if (listaProgramadoresFiltrados.Contains(c.Usuario.Nombre) && c.Proyecto.Id == proyecto.Id)
+                            {
+                                programadorCoincide = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            var horasTotales = calculo(proyecto.Id).Sum(c => c.Horas);
+
+            if (clienteCoincide && estadoCoincide && programadorCoincide && horasTotales > 0)
+            {
+                proyectosFiltrados.Add(proyecto);
+            }
+        }
+    }
+
+    private void CambiarMostrar()
+    {
+        if (CheckMostrarVacios)
+        {
+            CheckMostrarVacios = false;    
+        }
+        else
+        {
+            CheckMostrarVacios = true;
+        }
+
+        // Actúa según lo que hayamos marcado en el checkbox y luego llama a ComprobarMostrar(); para realizar los filtros
+        ComprobarMostrar();
+    }
+
+    private void ComprobarMostrar()
+    {       
+        if (!CheckSeleccionProgramador && !CheckSeleccionCliente && !CheckSeleccionEstado && !CheckMostrarVacios)
+        {
+            FiltrarMostrarInicio(); // No muestra los vacíos
+        }
+        else if ((!CheckSeleccionProgramador && (CheckSeleccionCliente || CheckSeleccionEstado)) && !CheckMostrarVacios)
+        {
+            FiltrarMostrarConSeleccionClienteOEstado(); // No muestra los vacíos
+        }
+        else if((CheckMostrarVacios || CheckSeleccionProgramador) || (CheckSeleccionProgramador && (CheckSeleccionCliente || CheckSeleccionEstado)))
+        {
+            FiltrarProyectos(); // Muestra todos
+        }
+    }
+}

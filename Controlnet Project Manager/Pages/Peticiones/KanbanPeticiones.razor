@@ -1,0 +1,734 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using MudBlazor
+@using System.Reflection;
+@using System.ComponentModel;
+@using static Controlnet_Project_Manager.Pages.Index
+
+
+@attribute [Authorize]
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject MyCustomTheme tema;
+    <style >
+    body {
+        background-color: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Background}" : $"{tema.Theme.Palette.Background}");
+    }
+
+
+    .mud-paper {
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 16px;
+        text-align: center;
+    }
+
+
+    .mud-typography-subtitle {
+        font-size: 1.0rem;
+        font-family: Arial, Helvetica, sans-serif;
+        font-weight: bold;
+        letter-spacing: 0;
+        text-transform: none;
+    }
+
+
+    .mud-input-label-outlined {
+        transform: translate(14px, 20px) scale(1);
+        pointer-events: none;
+        padding: 0 5px !important;
+    }
+
+
+    .mud-toolbar {
+        --mud-internal-toolbar-height: 15%;
+    }
+
+    .titulo-estado {
+        font-size: 1.0rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+        height: 60px;
+    }
+    .mud-paper {
+        font-size: 0.8rem;
+        text-align: left;
+    }
+
+    .floating-button {
+        position: fixed;
+        bottom: 20px;
+    }
+
+
+    .text-task {
+        font-size: 0.8rem;
+        color: #90A4AE;
+    }
+
+
+    .text-task-black {
+        font-size: 0.8rem;
+        color: #000;
+    }
+    .text-task-oscuro{
+        font-size: 0.8rem;
+        color: #fff;
+    }
+
+
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+    .separador {
+        margin: 2px 0;
+    }
+
+
+    .cuadro-proyecto {
+        padding: 15px;
+        background-color: white;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        box-shadow: 0px 10px 20px rgba(0, 0, 0, 0.1);
+        .cuadro-incidencia, .cuadro-desarrollo
+}
+    {
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+    }
+
+    .cell-template {
+        border: 1px solid @tema.Theme.Palette.Primary;
+        color: @tema.Theme.Palette.Primary;
+        background-color: @tema.Theme.Palette.Background;
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: 5px;
+    }
+</style>
+
+
+<MudToolBar DisableGutters="true" Class="d-flex" Style="@((Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; padding: 0 10px; justify-content: space-between; align-items: center;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.Palette.Primary.ToString()}; padding: 0 10px; justify-content: space-between; align-items: center;"))">
+
+    <div style="display: flex; flex-direction: row; justify-content: space-around; width: 33%;">
+
+        @if (menuRol != null && menuRol.Crear)
+        {
+            <MudButton @onclick="@(() => InvokeAsync(NewPeticionDialog))"
+                       Variant="Variant.Text"
+                       Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Add">
+                Nueva Peticion
+            </MudButton>
+        }
+    </div>
+
+    <div style="width: 33%; text-align: center;">
+        <MudText Color="Color.Secondary" Typo="Typo.h6">PETICIONES</MudText>
+    </div>
+
+    <div style="width: 33%; flex-direction: row; justify-content: space-around; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+
+        @*<MudDateRangePicker @ref="_picker" Placeholder="@("Selecciona una fecha")" Clearable="true" @bind-DateRange="_dateRange" Variant="Variant.Outlined" Style="color: white; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px; margin: 0px; height: 43px;" Margin="Margin.Dense">
+        <PickerActions>
+        <MudButton Class="mr-auto align-self-start" OnClick="@(() => _picker.Clear())">Limpiar</MudButton>
+        <MudButton OnClick="@(() => _picker.Close(false))">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => _picker.Close())">Ok</MudButton>
+        </PickerActions>
+        </MudDateRangePicker>*@
+
+    
+
+        <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+            <ActivatorContent>
+                <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))">
+                    <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                        @(TextSelection("Estado", _selectedEstadosPeticion))
+                    </div>
+                    <div style="position: absolute; right: 5px; bottom: 8px;">
+                        <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                    </div>
+                </MudChip>
+            </ActivatorContent>
+            
+            <ChildContent>
+                @foreach (var estado in _estadosPeticiones)
+                {
+                    var isChecked = _selectedEstadosPeticion.Contains(estado);
+
+                    <MudMenuItem Style="width: 250px; height: 50px;">
+                        <div>
+                            <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado" @onclick="@(() => ToggleSelection(estado,_selectedEstadosPeticion))" />
+                        </div>
+                    </MudMenuItem>
+                }
+            </ChildContent>
+        </MudMenu>
+    </div>
+
+</MudToolBar>
+@*
+    <br />
+<br />
+<ToolBarContent>
+    <MudText Typo="Typo.h6">@(ProyectoSelect)</MudText>
+    <MudSpacer/>
+    <MudSpacer/>
+    <ChildContent>
+        <MudMenuItem Style="width: 250px; height: 50px;">
+            <div>
+                <MudCheckBox T="bool" @bind-Checked=isChecked Label="Vista normal" @onclick="@(() => Vista("Normal"))" />
+            </div>
+        </MudMenuItem>
+        <MudMenuItem Style="width: 250px; height: 50px;">
+            <div>
+                <MudCheckBox T="bool" @bind-Checked=isChecked Label="Vista Kanban" @onclick="@(() => Vista("Kanban"))" />
+            </div>
+        </MudMenuItem>
+    </ChildContent>
+</ToolBarContent>
+*@
+<br/>
+<br/>
+@if (!Cargando)
+{
+    <MudDropContainer T="Peticion" @ref="_dropContainer" Items="@FiltrarPeticiones()" ItemsSelector="@((item,column) => textoAprobado(item) == column)" ItemDropped="TaskUpdated" Class="d-flex flex-row" Style="width:100%" CanDrop="@CanDrop">
+
+        <ChildContent>
+            <div style="display: flex; justify-content: space-around;">
+                @foreach (var item in _selectedEstadosPeticion)
+                {
+                    string customClass = "my-2 mx-2 ";
+                    string customKanTaskClass = "mud-height-full ";
+
+                    var peticionesEnEstado = ListaPeticiones.Count(p => textoAprobado(p) == item);
+                    string customBorderClass = "border-top: 5px solid";
+
+                    <MudPaper Elevation="3" Width="300px" MinHeight="100px" Class="@customClass">
+                        <MudText Typo="Typo.subtitle2" Class="titulo-estado" Style="@(Layout.esModoNocturno() ? "color:white" : "")">@item: @peticionesEnEstado</MudText>
+                        <hr style="border-top: 1px solid; width: 100%;">
+                        <MudDropZone T="Peticion" Identifier="@item" Class="@customKanTaskClass" Style="margin: 5px;"></MudDropZone>
+                    </MudPaper>
+
+                }
+            </div>
+        </ChildContent>
+
+
+        <ItemRenderer>
+            @if (context != null)
+            {
+                string customBorder = "pa-4 lg my-3 ";
+
+                string customBorderClass = "border-left: 5px solid ";
+
+                <MudPaper Class="pa-4 lg my-3" Style="@customBorderClass" @ondblclick="@(() => InfoPeticionDialog(context))">
+                    <div class="d-flex align-items-center" style="margin-bottom: 8px;">
+                        <MudIcon Icon="@Icons.Material.Filled.TaskAlt" Class="bi" Style="@(Layout.esModoNocturno() ? "margin-right: 8px;color:white" : "margin-right: 8px;")" />
+                        <MudText Class="titulo-proyecto" Style="@(Layout.esModoNocturno() ? "color:white" : "")">@context.Nombre</MudText>
+
+                    </div>
+                    <div class="d-flex flex-column">
+
+                        <div class="d-flex align-items-center">
+
+                            <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+
+                            <span class="text-task">Fecha Creación: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.FechaCreacion.ToString("dd/MM/yyyy")</span></span>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+                            @if (context.FechaFinalizacion != null)
+                            {
+                                <span class="text-task">Fecha Cerrada: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@(context.FechaFinalizacion.ToString().Substring(0, 10))</span></span>
+                            }
+                            else
+                            {
+                                <span class="text-task">Fecha Cerrada: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">Sin fecha</span></span>
+                            }
+
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <MudIcon Icon="@Icons.Material.Filled.PersonOutline" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+                            @if (context.Autor != null)
+                            {
+                                <span class="text-task">Autor: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@context.Autor</span></span>
+                            }
+                            else
+                            {
+                                <span class="text-task">Autor: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">Sin autor</span></span>
+                            }
+
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <MudIcon Icon="@Icons.Material.Filled.Description" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Dark)" Class="mr-2" />
+                            @if (context.Informacion != null)
+                            {
+                                <span class="text-task">Descripción: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">@((MarkupString)@context.Informacion)</span></span>
+                            }
+                            else
+                            {
+                                <span class="text-task">Descripción: <span class="@(Layout.esModoNocturno() ? "text-task-oscuro" : "text-task-black")">Sin información</span></span>
+                            }
+
+                        </div>
+
+                        <MudButtonGroup VerticalAlign="false" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" Variant="Variant.Outlined" Class="align-self-center mt-2">
+
+                            @if (menuRol != null && menuRol.Editar)
+                            {
+                                <MudTooltip Text="Editar Peticion">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EditPeticionDialog(context); })" />
+                                </MudTooltip>
+                            }
+
+                            @if (menuRol != null && menuRol.Eliminar)
+                            {
+                                <MudTooltip Text="Eliminar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EliminarPeticion(context); })" />
+                                </MudTooltip>
+                            }
+                        </MudButtonGroup>
+                        
+                        
+                    </div>
+
+                </MudPaper>
+
+            }
+        </ItemRenderer>
+    </MudDropContainer>
+}
+
+@code{
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    bool isChecked = false;
+    string vistaActual = "Normal";
+    [Parameter] public string id { get; set; }
+    [Parameter] public EventCallback<int> OnCountPeticion { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Parameter] public string ProyectoSelect { get; set; }
+
+    private List<String> _selectedEstadosPeticion = new List<String>();
+    private List<ProgramadoresProyecto> _programadores = new List<ProgramadoresProyecto>();
+    private int numPeticion { get; set; }
+    private String[] _estadosPeticiones;
+
+    private MenuRol menuRol = null;
+    public CPMUser usuario { get; set; }
+    private bool Cargando = true;
+    Stack<Peticion> navegacionProyecto = new Stack<Peticion>();
+    private Peticion peticion { get; set; }
+    private List<Peticion> ListaPeticiones = new List<Peticion>();
+    List<Peticion> _section = new List<Peticion>();
+    private MudDropContainer<Peticion> _dropContainer;
+
+    private void Vista(string tipo){
+        vistaActual = tipo;
+    }
+
+    private void ToggleSelection(string item, List<String> lista)
+    {
+        if (lista.Contains(item))
+        {
+            lista.Remove(item);
+        }
+        else
+        {
+            lista.Add(item);
+        }
+    }
+
+    private async Task TaskUpdated(MudItemDropInfo<Peticion> info)
+    {
+        if(info.Item.Desarrollo!=null){
+            var estadoToUpdate = _ApplicationDbContext.EstadosDesarrollos.FirstOrDefault(e => e.Nombre == info.DropzoneIdentifier);
+
+            if (estadoToUpdate != null)
+            info.Item.Desarrollo.EstadoDesarrollo = estadoToUpdate;
+        }
+        if (info.Item.Incidencia != null)
+        {
+            var estadoToUpdate = _ApplicationDbContext.EstadosIncidencias.FirstOrDefault(e => e.Nombre == info.DropzoneIdentifier);
+            if(estadoToUpdate != null)
+            info.Item.Incidencia.EstadoIncidencia = estadoToUpdate;
+        }
+        await UpdatePeticionStatus(info.Item, info.DropzoneIdentifier);
+    }
+
+    private bool CanDrop(Peticion item, string column)
+    {
+        return menuRol.Editar;
+    }
+
+    private async void EliminarPeticion(Peticion inc)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar Peticion", "¿Seguro que quieres eliminar peticion?", "Si", "No");
+        inc = _ApplicationDbContext.Peticiones.FirstOrDefault(it => it.Id == inc.Id);
+
+        if (result is true && inc != null)
+        {
+
+            _ApplicationDbContext.Peticiones.Remove(inc);
+            await _ApplicationDbContext.SaveChangesAsync();
+
+        }
+
+        if (int.TryParse(id, out int projectId))
+        {
+            await OnCountPeticion.InvokeAsync(await _ApplicationDbContext.Peticiones.Where(it => it.Proyecto.Id == projectId).CountAsync());
+        }
+        await CargarPeticionesPorProyecto(proyecto);
+        StateHasChanged();
+
+    }
+
+    private async Task EditPeticionDialog(Peticion pro)
+    {
+        @if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+            var parameters = new DialogParameters();
+            parameters.Add("peticion", pro);
+            parameters.Add("proyecto", proyecto);
+            var dialog = await _dialogService.Show<NewPeticion>("Editar Peticion", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+
+                await CargarPeticionesPorProyecto(proyecto);
+                StateHasChanged();
+            }
+        }
+        //SelectedItem = null;
+    }
+
+    private async Task UpdatePeticionStatus(Peticion peticion, string newStatus)
+    {
+
+        // Consultar la Peticion con el nombre proporcionado en la base de datos.
+        var peticionToUpdate = _ApplicationDbContext.Peticiones.Include(c => c.Desarrollo).Include(c => c.Incidencia).FirstOrDefault(p => p.Id == peticion.Id);
+        if(peticionToUpdate != null)
+        {
+            if (peticionToUpdate.Desarrollo != null)
+            {
+                var estadoToUpdate = _ApplicationDbContext.EstadosDesarrollos.FirstOrDefault(e => e.Nombre == newStatus);
+
+                peticionToUpdate.Desarrollo.EstadoDesarrollo = estadoToUpdate;
+                _ApplicationDbContext.SaveChanges();
+            }
+            if (peticionToUpdate.Incidencia != null)
+            {
+                var estadoToUpdate = _ApplicationDbContext.EstadosIncidencias.FirstOrDefault(e => e.Nombre == newStatus);
+
+                peticionToUpdate.Incidencia.EstadoIncidencia = estadoToUpdate;
+                _ApplicationDbContext.SaveChanges();
+            }
+
+        }
+    }
+
+    private async void InfoPeticionDialog(Peticion inc)
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        parameters.Add("peticion", inc);
+        var dialog = await _dialogService.Show<InfoPeticion>("Ver Informacion de la Peticion", parameters, options).Result;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                usuario = Layout.usuario;
+
+                var url = GetLastSegmentUrl();
+                var idMenu = GetIdMenu(url);
+                menuRol = await Crud.GetMenuRol(idMenu, usuario);
+                Cargando = false;
+                navegacionProyecto.Push(peticion);
+                proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+                await CargarPeticionesPorProyecto(proyecto);
+                await cargarProgramadores();
+                await cargarEstadosPeticiones();
+                await using var ctx = await DbFactory.CreateDbContextAsync();
+
+                // Obtener la lista de nombres de los tipos de peticiones
+                var tiposPeticiones = await ctx.EstadosIncidencias
+                                                .Where(e => e.Notificar)
+                                                .Select(e => e.Nombre)
+                                                .ToListAsync();
+                tiposPeticiones.AddRange( await ctx.EstadosDesarrollos
+                                                .Where(e => e.Notificar)
+                                                .Select(e => e.Nombre)
+                                                .ToListAsync());
+
+
+                Dictionary<string, int> recuentoPeticionesPorTipo = new Dictionary<string, int>();
+
+                foreach (var tipo in tiposPeticiones)
+                {
+                    int recuento = await ctx.Peticiones
+                                            .Where(it => it.Proyecto.Id == projectId && (it.Desarrollo != null && it.Desarrollo.EstadoDesarrollo.Nombre == tipo || it.Incidencia != null && it.Incidencia.EstadoIncidencia.Nombre == tipo))
+                                            .CountAsync();
+
+                    recuentoPeticionesPorTipo.Add(tipo, recuento);
+                }
+
+                await CalcularTotalPeticiones();
+            }
+            else
+            {
+                await CargarPeticionesDesdeBD();
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+        }
+    }
+
+
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        int indiceBarra = relativeUri.IndexOf('/');
+        string nombreUrl = relativeUri.Substring(0, indiceBarra);
+        return nombreUrl;
+    }
+
+
+    private string TextSelection(string item, List<String> lista)
+    {
+        var texto = "";
+
+        if (lista.Count == 0)
+        {
+            texto = item;
+
+        }
+        else if (lista.Count == 1)
+        {
+            texto = lista.FirstOrDefault();
+
+        }
+        else
+        {
+            texto = "2 " + item + " o más seleccionados";
+            texto = texto.Substring(0, Math.Min(texto.Length, 25)) + "...";
+        }
+        FiltrarPeticiones();
+        return texto;
+    }
+
+    private List<Peticion> FiltrarPeticiones()
+    {
+
+        return ListaPeticiones
+            .FindAll(it => (!_selectedEstadosPeticion.Any() || _selectedEstadosPeticion.Any(s => textoAprobado(it) == s)));
+    }
+
+    private async Task cargarProgramadores()
+    {
+        if (int.TryParse(id, out int projectId))
+        {
+            await using var ctx = await DbFactory.CreateDbContextAsync();
+
+            _programadores = await ctx.ProgramadoresProyectos.Include(it => it.Programador).Include(it => it.Proyecto).Where(programador => programador.Proyecto.Id == projectId).ToListAsync();
+        }
+    }
+
+    private async Task cargarEstadosPeticiones()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        _selectedEstadosPeticion = new List<string>();
+        _estadosPeticiones = new String[] { "Aceptada", "Rechazada", "Pendiente" };
+        _selectedEstadosPeticion.AddRange(_estadosPeticiones);
+    }
+
+    private async Task CargarPeticionesDesdeBD()
+    {
+        try
+        {
+            ListaPeticiones = await _ApplicationDbContext.Peticiones.Include(it => it.Incidencia).Include(it => it.Desarrollo).Include(it => it.Proyecto).Include(it => it.Autor).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarPeticionesDesdeBD();
+        }
+    }
+
+    private async Task CalcularTotalPeticiones()
+    {
+        if (int.TryParse(id, out int projectId))
+        {
+            await using var ctx = await DbFactory.CreateDbContextAsync();
+
+            // Obtener la lista de nombres de los tipos de peticiones seleccionados
+            var tiposPeticiones = await ctx.EstadosIncidencias
+                                                .Where(e => e.Notificar)
+                                                .Select(e => e.Nombre)
+                                                .ToListAsync();
+                tiposPeticiones.AddRange( await ctx.EstadosDesarrollos
+                                                .Where(e => e.Notificar)
+                                                .Select(e => e.Nombre)
+                                                .ToListAsync());
+
+
+
+            // Contador para el total de peticiones
+            int totalPeticiones = 0;
+
+            // Iterar sobre cada tipo y sumar el total de peticiones
+            foreach (var tipo in tiposPeticiones)
+            {
+                int recuento = await ctx.Peticiones
+                                            .Where(it => it.Proyecto.Id == projectId && (it.Desarrollo != null && it.Desarrollo.EstadoDesarrollo.Nombre == tipo || it.Incidencia != null && it.Incidencia.EstadoIncidencia.Nombre == tipo))
+                                            .CountAsync();
+
+                totalPeticiones += recuento;
+            }
+
+            // Asignar el total al contador
+            numPeticion = totalPeticiones;
+
+            // Llamar a OnCountPeticion para actualizar el valor en la página anterior
+            await OnCountPeticion.InvokeAsync(numPeticion);
+        }
+        FiltrarPeticiones();
+    }
+
+    public class KanbanPeticionItem
+    {
+        public int Id { get; init; }
+        public string Name { get; init; }
+        public string Status { get; set; }
+        public DateTime FechaPrevistaContrato { get; set; }
+        public DateTime FechaPrevistaEntrega { get; set; }
+        public int HorasEstimadas { get; set; }
+        public string Cliente { get; set; }
+
+        public KanbanPeticionItem(int id, string name, string status, DateTime fechaPrevistaContrato, DateTime fechaPrevistaEntrega, int horasEstimadas, string cliente)
+        {
+            Id = id;
+            Name = name;
+            Status = status;
+            FechaPrevistaContrato = fechaPrevistaContrato;
+            FechaPrevistaEntrega = fechaPrevistaEntrega;
+            HorasEstimadas = horasEstimadas;
+            Cliente = cliente;
+        }
+    }
+
+
+   
+    private async void NewPeticionDialog()
+    {
+
+        if (peticion == null)
+        {
+            peticion = new Peticion();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+
+                peticion.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", peticion.Proyecto);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+                var dialog = await _dialogService.Show<NewPeticion>("Nueva peticion", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarPeticionesPorProyecto(proyecto);
+                    await OnCountPeticion.InvokeAsync(await _ApplicationDbContext.Peticiones.Where(it => it.Proyecto.Id == projectId).CountAsync());
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+
+                Console.WriteLine("ID de peticion no válida");
+                return;
+            }
+        }
+    }
+
+    private async Task CargarPeticionesPorProyecto(Proyecto pro)
+    {
+        try
+        {
+
+            ListaPeticiones = await _ApplicationDbContext.Peticiones.Include(it => it.Desarrollo).Include(it => it.Incidencia).Include(it => it.Proyecto).Include(it => it.Autor).Where(P => P.Proyecto.Id == pro.Id).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarPeticionesPorProyecto(pro);
+        }
+    }
+
+    private string textoAprobado(Peticion x)
+    {
+        return x.Aceptado == null ? "Pendiente" : x.Aceptado == true ? "Aceptada" : "Rechazada";
+    }
+
+}

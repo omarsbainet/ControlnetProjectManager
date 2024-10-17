@@ -1,0 +1,253 @@
+﻿@using Blazored.TextEditor;
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.AspNetCore.Identity
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject ApplicationDbContext _ApplicationDbContext
+@inject FileService fileService;
+
+<MudDialog Class="mud-dialogTitle mud-dialog">
+    <DialogContent>
+        <MudContainer>
+            <MudText>
+                <div style="display: flex; height: 270px; position: relative;">
+                    <div style="width: 100%; position: relative; padding-right: 3%">
+                        <MudItem Style="margin-bottom: 25px;">
+                            <MudText Style="position: relative; display: ruby-text; font-size: large" Color="Color.Tertiary">Información</MudText>
+                        </MudItem>
+                        <MudDivider Class="custom-mudDivider-informacion"/>
+                        <MudGrid Style="display: block">
+                            <MudItem Style="display: flex;">
+                                <h6 class="custom-mudItem-h6">Autor:</h6>
+                                <MudChip>@Autor</MudChip>
+                            </MudItem>
+                            <MudItem Style="display: flex;">
+                                <h6 class="custom-mudItem-h6">Programador:</h6>
+                                <MudChip Color="Color.Primary">@Programador</MudChip>
+                            </MudItem>
+                            <MudItem Style="display: flex;">
+                                <h6 class="custom-mudItem-h6">Estado:</h6>
+                                <MudChip Color="Color.Tertiary" Style="@ColorEstado">@Estado</MudChip>
+                            </MudItem>
+                        </MudGrid>
+                        <br />
+                    </div>
+                    <div style="width: 100%; padding-left: 3%">
+                        @if (ListaDocumentosIncidencia.Count>0)
+                        {
+                            <MudItem>
+                                <MudText Style="position: relative; display: ruby-text; font-size: large" Color="Color.Tertiary">Documentos</MudText>
+                            </MudItem>
+                            <MudDivider Class="custom-mudDivider-documento" />
+                            <MudTable Items="@ListaDocumentosIncidencia" Class="custom-mud-table custom-mud-table-container custom-mud-table-head" Hover="true" Breakpoint="Breakpoint.Sm" LoadingProgressColor="Color.Info">
+                                <HeaderContent>
+                                    <MudTh Style="width: 270px;">Nombre</MudTh>
+                                    <MudTh Style="width: 250px;">Tipo</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd Style="width: 260px;" DataLabel="Nombre">@context.Nombre</MudTd>
+                                    <MudTd DataLabel="Tipo">@GetExtension(@context.Nombre)</MudTd>
+                                    <MudTd>
+                                        <MudTooltip Text="Descargar">
+                                            <MudIconButton Class="custom-mud-icon-button" OnClick="@(() => { DescargarArchivo(context.Id, context.Nombre); })" Icon="@Icons.Material.Filled.Download" Color="Color.Tertiary"></MudIconButton>
+                                        </MudTooltip>
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                        else
+                        {
+                            <div style="position: relative;">
+                                <MudItem Style="margin-bottom: 35px">
+                                    <MudText Style="position: relative; display: ruby-text; font-size: large" Color="Color.Tertiary">Documentos</MudText>
+                                </MudItem>
+                                <MudDivider Class="custom-mudDivider-sinDocumento" />
+                                <MudItem>
+                                    No hay documentos.
+                                </MudItem>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <BlazoredTextEditor ReadOnly="true" @ref="@QuillHtml" EditorCssStyle="height: 200px">
+                    <ToolbarContent>
+                        <h6 class="custom-mudItem-h6" style="color: var(--mud-palette-tertiary)">Descripción</h6>
+                    </ToolbarContent>
+                    <EditorContent>
+                        @if (Descripcion == null)
+                        {
+                            <p style="color: grey; pointer-events: none;">No hay descripción.</p>
+                        }
+                        else
+                        {
+                            @((MarkupString)Descripcion)
+                        }
+                    </EditorContent>
+                </BlazoredTextEditor>
+            </MudText>
+        </MudContainer>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Tertiary" OnClick="Cerrar">Cerrar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+<style>
+
+    .mud-dialog{
+        height: 650px;
+        max-width: 1000px;
+    }
+
+    .mud-dialogTitle .mud-typography-h6{
+        color: var(--mud-palette-primary) !important;
+        font-size: 26px;
+    }
+
+    .mud-chip-estado{
+        color: var(--mud-palette-primary-text);
+    }
+
+    .custom-mud-table{
+        position: relative;
+        top: 60px;
+    }
+
+    .custom-mud-table-container .mud-table-container {
+        width: 100%;
+        overflow-y: auto;
+        height: 170px;
+    }
+
+    .custom-mud-table-head .mud-table-head {
+        display: table-header-group;
+        position: absolute;
+        top: -56px;
+    }
+
+    .custom-mud-icon-button{
+        margin: -20px -20px -20px 0px;
+    }
+
+    .custom-mudItem-h6 {
+        align-content: center;
+        width: 120px;
+        align-self: end;
+    }
+
+    .ql-toolbar.ql-snow {
+        padding: 0px;
+        border-top: 0px;
+        border-left: 0px;
+        border-right: 0px;
+        font-family: inherit;
+    }
+
+    .custom-mudDivider-informacion{
+        border: 1px;
+        top: -15px;
+        position: relative;
+    }
+
+    .custom-mudDivider-documento {
+        border: 1px;
+        top: 10px;
+        position: relative;
+    }
+
+    .custom-mudDivider-sinDocumento {
+        border: 1px;
+        top: -25px;
+        position: relative;
+    }
+
+
+</style>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Incidencia incidencia { get; set; }
+
+    private List<DocumentoIncidencia> ListaDocumentosIncidencia { get; set; }
+    private string Autor { get; set; }
+    private string Programador { get; set; }
+    private string Estado { get; set; }
+    private string Descripcion { get; set; }
+    private string ColorEstado { get; set; }
+    private List<String> listaExtensiones = new List<String>();
+    private BlazoredTextEditor QuillHtml;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            AsignarDatos();
+            await CargarDocumetos();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    //Asignar los datos de la incidencia a las variables que se van a mostrar en el Dialog
+    private void AsignarDatos()
+    {
+        if (incidencia.Autor != null)
+        {
+            Autor = incidencia.Autor.Nombre;
+        }
+        else
+        {
+            Autor = "Sin asignar";
+        }
+        if (incidencia.UsuarioAsignado != null)
+        {
+            Programador = incidencia.UsuarioAsignado.Nombre;
+        }
+        else
+        {
+            Programador = "Sin asignar";
+        }
+        if (incidencia.EstadoIncidencia != null)
+        {
+            Estado = incidencia.EstadoIncidencia.Nombre;
+        }
+        else
+        {
+            Estado = "Sin asignar";
+        }
+        Descripcion = incidencia.Informacion;
+        ColorEstado = $"background-color: {incidencia.EstadoIncidencia.Color}; font-weight: initial;";
+    }
+
+    //Obtener los documentos de la incidencia actual
+    private async Task CargarDocumetos()
+    {
+        ListaDocumentosIncidencia = _ApplicationDbContext.DocumentosIncidencias
+            .Where(doc => doc.Incidencia.Id == incidencia.Id)
+            .ToList();
+    }
+
+    //Obtener la extensión del documento pasado por parametro
+    private string GetExtension(string nombreDocumento)
+    {
+        return Path.GetExtension(nombreDocumento);
+    }
+
+    //Descargar el archivo usando FileService(injectado) segun el id y el nombre del archivo pasados por parametros
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(ListaDocumentosIncidencia, idArchivo, nombreArchivo);
+    }
+
+    //Cerrar el Dialog
+    private void Cerrar()
+    {
+        MudDialog.Close(DialogResult.Ok(true));
+    }
+}

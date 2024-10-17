@@ -1,0 +1,713 @@
+﻿@using Controlnet_Project_Manager.Pages.Incidencia;
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Microsoft.EntityFrameworkCore;
+@using Severity = MudBlazor.Severity;
+@using System.Security.Claims;
+@using Blazored.TextEditor;
+
+@inject ISnackbar Snackbar;
+@inject AuthenticationStateProvider _auth;
+@inject UserManager<CPMUser> _UserManager
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject ApplicationDbContext _ApplicationDbContext;
+@inject IDialogService _dialogService;
+@inject FileService fileService;
+@inject NavigationManager _navigation;
+
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    @if (peticion != null)
+                    {
+                        <MudIconButton OnClick="CambioIcono" Class="icon-position rounded-circle" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Icon="@Icons.Material.Outlined.Build"></MudIconButton>
+                    }
+                    <MudTabs Class="@((peticion!=null) ? "mud-tabs-toolbar-componente mud-tabs-panels-componente" : " ")" Elevation="6" Rounded="true">
+                        <MudTabPanel OnClick="CambioPanel" Text="Información">
+                            <br />
+                            <br />
+                            <MudGrid>
+                                <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full">
+                                    <MudAutocomplete T="CPMUser" Label="Programador" @bind-Value="desarrollo.UsuarioAsignado" SearchFunc="@Search2"
+                                                     ResetValueOnEmptyText="@resetValueOnEmptyText"
+                                                     CoerceText="@coerceText" CoerceValue="@coerceValue"
+                                                     AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary"
+                                    Disabled="@isDisabled">
+                                        <ItemTemplate >
+                                            @context.Nombre
+                                        </ItemTemplate>
+                                    </MudAutocomplete>
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudSelect Label="Estado" @bind-Value="desarrollo.EstadoDesarrollo" ToStringFunc="@(it=> it==null? "" : it.Nombre)" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar estado">
+                                       
+                                    @foreach (var item in lstEstadoDesarrollo)
+                                    {
+                                        <MudSelectItem Value="@item"></MudSelectItem>
+                                    }
+
+                                    </MudSelect>
+                                </MudItem>
+                            </MudGrid>
+                            <MudGrid>
+                                <MudItem xs="6" >
+                                    <MudTextField xs="6" @bind-Value="desarrollo.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" Disabled="@isDisabled" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    @if (desarrollo.Autor == null)
+                                    {
+                                        <MudTextField xs="6" T="string" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true">No tiene autor</MudTextField>
+                                    }
+                                    else
+                                    {
+                                        <MudTextField @bind-Value="desarrollo.Autor.Nombre" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" ReadOnly="true" Disabled="true" />
+                                    }
+                                </MudItem>
+                            </MudGrid>
+                            <MudGrid>
+                                <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8">
+                                    <MudDatePicker Date="@desarrollo.FechaCreacion" DateChanged="e => desarrollo.FechaCreacion = e.Value.Date" Label="Fecha de Creación" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                                </MudItem>
+                                <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8">
+                                    <MudDatePicker Date="@desarrollo.FechaEntrega" DateChanged="e => desarrollo.FechaEntrega = e.Value.Date" Label="Fecha de Entrega" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="@isDisabled" Disabled="@isDisabled"/>
+                                </MudItem>
+                            </MudGrid>
+                            <BlazoredTextEditor @ref="@QuillHtml" EditorCssStyle="height: 250px" Placeholder="No hay descripcion" ReadOnly="@isDisabled" >
+                                <ToolbarContent>
+                                    <select class="ql-header">
+                                        <option selected=""></option>
+                                        <option value="1"></option>
+                                        <option value="2"></option>
+                                        <option value="3"></option>
+                                        <option value="4"></option>
+                                        <option value="5"></option>
+                                    </select>
+                                    <span class="ql-formats">
+                                        <button class="ql-bold"></button>
+                                        <button class="ql-italic"></button>
+                                        <button class="ql-underline"></button>
+                                        <button class="ql-strike"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <select class="ql-color"></select>
+                                        <select class="ql-background"></select>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-list" value="ordered"></button>
+                                        <button class="ql-list" value="bullet"></button>
+                                    </span>
+                                </ToolbarContent>
+                                <EditorContent >
+                                    @((MarkupString)desarrollo.Informacion)
+                                </EditorContent>
+                            </BlazoredTextEditor>
+                        
+                        </MudTabPanel>
+                        <MudTabPanel OnClick="CambioPanel" Text="Documentos" Disabled="@isDisabled">
+                            <br />
+                            <br />
+                            <MudForm Model="@doc" @ref="@formDoc" ValidationDelay="0">
+                                @if (lstDocDesarrollo != null && lstDocDesarrollo.Count != 0)
+                                {
+                                    <MudDataGrid @ref="@_grid" Elevation="6" T="DocumentoDesarrollo" Items="@FiltrarDocumentos()" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="5" CurrentPage="@_selectedPage">
+                                        <ToolBarContent>
+                                            <MudText Typo="Typo.h6">Documentos</MudText>
+                                            <MudSpacer />
+                                            <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos" AppendMultipleFiles>
+                                                <ButtonTemplate>
+                                                    <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                                    <MudIconButton OnClick="@DescargarTodo" Variant="Variant.Filled" Color="Color.Primary" Icon="@IconoDescarga" />
+                                                </ButtonTemplate>
+                                            </MudFileUpload>
+                                            <MudSpacer />
+                                        <MudSelect T="string" Label="Tipo documentación" AnchorOrigin="Origin.BottomCenter" @bind-Value="@tipoDoc" Variant="Variant.Outlined" Margin="Margin.Dense" @onchange="@HandleTipoDocChange" Clearable>
+                                                @foreach (string s in listaExtensiones)
+                                                {
+                                                    <MudSelectItem Value="@s">@s</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </ToolBarContent>
+                                        <Columns>
+                                            <PropertyColumn Property="x => GetWithoutExtension(x)" title="Nombre"></PropertyColumn>
+                                            <PropertyColumn Property="x => GetExtension(x)" title="Tipo Documento"></PropertyColumn>
+                                            <TemplateColumn>
+                                                <CellTemplate>
+                                                    <MudTooltip Text="Descargar">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { DescargarArchivo(context.Item.Id, context.Item.Nombre); })"></MudIconButton>
+                                                    </MudTooltip>
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                            <TemplateColumn>
+                                                <CellTemplate>
+                                                    <MudTooltip Text="Eliminar">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { ShowConfirmationDialog(context.Item); })"></MudIconButton>
+                                                    </MudTooltip>
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                        </Columns>
+                                        <PagerContent>
+                                            <MudPagination SelectedChanged="PageChanged" Count="@((_grid?.GetFilteredItemsCount() ?? 0 + _grid?.RowsPerPage ?? 0 - 1) / _grid?.RowsPerPage ?? 1)" Class="pa-4" />
+                                        </PagerContent>
+                                    </MudDataGrid>
+                                }
+                                else
+                                {
+                                    <MudText>No hay documentos en este desarrollo. ¿Desea agregar alguno?</MudText>
+                                    <MudSpacer />
+                                <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos" AppendMultipleFiles>
+                                        <ButtonTemplate>
+                                            <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                        </ButtonTemplate>
+                                    </MudFileUpload>
+                                }
+                            </MudForm>
+                        </MudTabPanel>
+                    </MudTabs>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => Submit())">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+
+    .icon-position{
+        position: absolute;
+        z-index: 1000;
+        top:18px;
+    }
+
+    .mud-tabs-toolbar-componente .mud-tabs-toolbar {
+        position: absolute;
+        left: 70px;
+        width: 90%;
+        z-index:1000;
+    }
+
+    .mud-tabs-panels-componente .mud-tabs-panels {
+        margin-top:3%;
+    }
+
+</style>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Desarrollo desarrollo { get; set; }
+    [Parameter] public EventCallback<Desarrollo> OnNewDesarollo { get; set; }
+    [Parameter] public Desarrollo desarrollopadre { get; set; }
+    public EstadoDesarrollo estadoDesarrollo { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; } = new Proyecto();
+    [Parameter] public CPMUser usuario { get; set; }
+    [Parameter] public List<DocumentoPeticion> listaDocumentoPeticion { get; set; }
+    [Parameter] public Peticion peticion { get; set; }
+    [Parameter] public EventCallback<bool> onChangeIcon { get; set; }
+    [Parameter] public EventCallback<Desarrollo> OnGetDataDesarrollo { get; set; }
+    [Parameter] public EventCallback<List<DocumentoDesarrollo>> OnGetListaDocumentoDesarrollo { get; set; }
+
+    [Inject] private IDialogService DialogService { get; set; }
+    MudForm form;   
+    List<EstadoDesarrollo> lstEstadoDesarrollo = new List<EstadoDesarrollo>();
+    List<CPMUser> lstUsers = new List<CPMUser>();
+    bool success;
+    string[] errors = { };
+    private MudForm formDoc;
+    private DocumentoDesarrollo doc = new();
+    private string fileContent;
+    private IBrowserFile file { get; set; }
+    List<DocumentoDesarrollo> lstDocDesarrollo { get; set; } = new();
+    string IconoDescarga = Icons.Material.Filled.Download;
+    private MudDataGrid<DocumentoDesarrollo>? _grid;
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string _dragClass = DefaultDragClass;
+    private readonly IList<IBrowserFile> files;
+    List<string> listaExtensiones = new();
+    List<DocumentoDesarrollo> filteredDocs;
+    private bool changeIcon = true;
+    private bool panelInformacion = true;
+    private BlazoredTextEditor QuillHtml;
+
+    [Parameter] public string EstadoAnt { get; set; }
+    [Parameter] public bool canEdit { get; set; }
+    [Parameter] public bool canFinish { get; set; }
+    private bool isDisabled;
+
+    private List<DocumentoDesarrollo> FiltrarDocumentos()
+    {
+        return lstDocDesarrollo.Where(it => tipoDoc == null || GetExtension(it).ToLower() == tipoDoc.ToLower()).ToList();
+    }
+
+    private void ConvertirLista()
+    {
+        if(listaDocumentoPeticion != null)
+        {
+            List<DocumentoDesarrollo> listaDocumentoDesarrollo = listaDocumentoPeticion
+                .Select(dp => new DocumentoDesarrollo
+                {
+                    Nombre = dp.Nombre,
+                    Documento = dp.Documento,
+                    Desarrollo = desarrollo
+                })
+                .ToList();
+            lstDocDesarrollo.AddRange(listaDocumentoDesarrollo);
+        }
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        isDisabled = canFinish && !canEdit;
+        await base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if(peticion != null)
+                {
+                    //proyecto = peticion.Proyecto;
+
+                    if(desarrollo == null)
+                    {
+                        desarrollo = new();
+                        desarrollo.FechaCreacion = DateTime.Now;
+                        desarrollo.FechaEntrega = peticion.FechaEntrega;
+                        desarrollo.Autor = _ApplicationDbContext.Users.First(c => c.Id == usuario.Id);
+                        desarrollo.Informacion = peticion.Informacion;
+                        desarrollo.Nombre = peticion.Nombre;
+                    }
+
+                }
+                else if (desarrollo == null)
+                {
+                    desarrollo = new();
+                    desarrollo.FechaCreacion = DateTime.Now;
+                    desarrollo.FechaEntrega = DateTime.Now;
+                    desarrollo.Autor = _ApplicationDbContext.Users.First(c => c.Id == usuario.Id);
+                }
+
+                if (desarrollo.Id != 0 && desarrollo.Id != null)
+                {
+                    desarrollo = _ApplicationDbContext.Desarrollos.Include(u => u.Autor).FirstOrDefault(u => u.Id == desarrollo.Id);
+                    await cargarDocs(desarrollo.Id);
+                }
+
+                await cargarEstados();
+                await cargaUsuario();
+                GetListaExtension(lstDocDesarrollo);
+                wait = false;
+
+                ConvertirLista();
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    private async Task<IEnumerable<CPMUser>> Search2(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstUsers;
+        return lstUsers.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        //_ApplicationDbContext.Entry(desarrollo).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (desarrollo.Id != 0 && desarrollo.Id != null)
+                {
+                    await ActualizarDesarrollo();
+                }
+                else
+                {
+                    await AgregarDesarrollo();
+                }
+
+                // Subir el archivo si está presente
+                await UploadFile();
+
+
+                var dialogData = new DialogData
+                    {
+                        Desarrollo = desarrollo,
+                        Documento = doc
+                    };
+                if (desarrollo.UsuarioAsignado != null)
+                {
+                  //  await SendMail.SendMailVoid("Asignación desarrollo", desarrollo.UsuarioAsignado.Email, "Se le ha asignado un nuevo desarrollo (" + desarrollo.Nombre + ")");
+                }
+
+                ComponenteFinalizado(desarrollo);
+
+                MudDialog.Close(DialogResult.Ok(dialogData));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    
+    async Task cargarEstados()
+    {
+
+        var userId = _UserManager.GetUserId((await _auth.GetAuthenticationStateAsync()).User);
+        var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == userId);
+
+        if (user.Rol.Name.ToUpper() == "CLIENTE")
+        {
+            lstEstadoDesarrollo = _ApplicationDbContext.EstadosDesarrollos.Where(it => it.EstadoCl == true).OrderBy(it => it.Nombre).ToList();
+        }
+        else
+        {
+            lstEstadoDesarrollo = _ApplicationDbContext.EstadosDesarrollos.OrderBy(it => it.Nombre).ToList();
+        }
+
+
+    }
+
+    async Task cargarDocs(int idDesarrollo)
+    {
+        lstDocDesarrollo = await _ApplicationDbContext.DocumentosDesarrollos
+            .Where(doc => doc.Desarrollo.Id == idDesarrollo)
+            .ToListAsync();
+    }
+
+    private async Task cargaUsuario()
+    {
+        // Cargar los usuarios asociados a los IDs obtenidos
+        lstUsers = await _ApplicationDbContext.Users
+        .Where(usuario => _ApplicationDbContext.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+            .ToListAsync();
+    }
+
+    private async Task ActualizarDesarrollo()
+    {
+        proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == desarrollo.Proyecto.Id);
+
+        if (proyecto != null)
+        {
+            desarrollo.Proyecto = proyecto;
+
+            if (EstadoAnt != desarrollo.EstadoDesarrollo.Nombre.ToUpper())
+            {
+                if (desarrollo.EstadoDesarrollo.FinalizacionDesarrollo)
+                {
+                    desarrollo.FechaFinalizacion = DateTime.Now;
+                }
+                else if (desarrollo.EstadoDesarrollo.Nombre.ToUpper() != "VERIFICADO POR CLIENTE")
+                {
+                    desarrollo.FechaFinalizacion = null;
+                }
+            }
+
+            if (panelInformacion)
+            {
+                desarrollo.Informacion = await QuillHtml.GetHTML();
+            }
+
+            _ApplicationDbContext.Desarrollos.Update(desarrollo);
+            await _ApplicationDbContext.SaveChangesAsync();
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+            return;
+        }
+    }
+
+    private async Task AgregarDesarrollo()
+    {
+        if (!string.IsNullOrEmpty(desarrollo.Nombre))
+        {
+            proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == proyecto.Id);
+
+            if (proyecto != null)
+            {
+                desarrollo.Proyecto = proyecto;
+                if (desarrollo.EstadoDesarrollo.Nombre == "Terminado")
+                {
+                    desarrollo.FechaFinalizacion = DateTime.Now;
+                }
+                else
+                {
+                    desarrollo.FechaFinalizacion = null;
+                }
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                return;
+            }
+            if (desarrollopadre != null)
+            {
+                desarrollo.Padre = desarrollopadre;
+                if(desarrollopadre.Hijos == null)
+                {
+                    desarrollopadre.Hijos = new List<Desarrollo>();
+                }
+                desarrollopadre.Hijos.Add(desarrollo);
+                _ApplicationDbContext.Desarrollos.Update(desarrollopadre);
+            }
+
+            if (panelInformacion)
+            {
+                desarrollo.Informacion = await QuillHtml.GetHTML();
+            }
+
+            _ApplicationDbContext.Desarrollos.Add(desarrollo);
+            _ApplicationDbContext.SaveChanges();
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", "El nombre del desarrollo es obligatorio");
+            return;
+        }
+    }
+
+    private async Task SeleccionarArchivos(IReadOnlyList<IBrowserFile> files)
+    {
+        try
+        {
+            foreach (IBrowserFile browserFile in files)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await browserFile.OpenReadStream().CopyToAsync(memoryStream);
+                    var byteArray = memoryStream.ToArray();
+                    var fileContent = Convert.ToBase64String(byteArray);
+
+                    // Asignar contenido del archivo a la propiedad Documento de doc
+                    var nuevoDocumento = new DocumentoDesarrollo
+                        {
+                            Documento = fileContent,
+                            Nombre = browserFile.Name,
+                            Desarrollo = desarrollo
+                        };
+                    lstDocDesarrollo.Add(nuevoDocumento);
+                    file = browserFile;
+                }
+            }
+            _ApplicationDbContext.Entry(desarrollo).Reload();
+            StateHasChanged();
+            Snackbar.Add("Agregado correctamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UploadFile()
+    {
+        try
+        {
+            foreach (DocumentoDesarrollo d in lstDocDesarrollo)
+            {
+                if (d.Id != 0 && d.Id != null)
+                {
+                    _ApplicationDbContext.DocumentosDesarrollos.Update(d);
+                }
+                else
+                {
+                    _ApplicationDbContext.DocumentosDesarrollos.Add(d);
+                }
+            }
+
+            await _ApplicationDbContext.SaveChangesAsync();
+            Snackbar.Add("Desarrollo publicado correctamente", Severity.Success);
+            _navigation.NavigateTo(_navigation.GetUriWithQueryParameter("/Proyectos/", proyecto.Id));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(lstDocDesarrollo, idArchivo, nombreArchivo);
+    }
+
+    private async Task DescargarTodo()
+    {
+        if (lstDocDesarrollo != null && lstDocDesarrollo.Count != 0)
+        {
+            foreach (DocumentoDesarrollo d in lstDocDesarrollo)
+            {
+                await fileService.DescargarArchivo(lstDocDesarrollo, d.Id, d.Nombre);
+            }
+        }
+        else
+        {
+            Snackbar.Add("No hay archivos disponibles.", Severity.Warning);
+        }
+    }
+
+    public class DialogData
+    {
+        public Desarrollo Desarrollo { get; set; }
+        public DocumentoDesarrollo Documento { get; set; }
+    }
+
+    private async Task ClearFiles()
+    {
+        try
+        {
+            // Limpiar archivos y liberar recursos
+            doc = new();
+            fileContent = null;
+            file = null;
+            foreach (var f in lstDocDesarrollo.ToList())
+            {
+                DeleteFile(f);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al limpiar los archivos: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private int _selectedPage;
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+
+        StateHasChanged();
+    }
+
+    private void DeleteFile(DocumentoDesarrollo documento)
+    {
+        try
+        {
+            lstDocDesarrollo.Remove(documento);
+            _ApplicationDbContext.DocumentosDesarrollos.Remove(documento);
+            Snackbar.Add("Elimninado correctamente", Severity.Success);
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add("Error al eliminar el archivo", Severity.Error);
+        }
+    }
+
+    private async void ShowConfirmationDialog(DocumentoDesarrollo document)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar documento", "¿Seguro que quieres eliminar documento?", "Si", "No");
+
+        if(result is true)
+        {
+            DeleteFile(document);
+            StateHasChanged();
+        }
+    }
+
+    string tipoDoc;
+
+    private void GetListaExtension(List<DocumentoDesarrollo>
+    listaDocs)
+    {
+        foreach (DocumentoDesarrollo d in listaDocs)
+        {
+            if (!listaExtensiones.Contains(GetExtension(d).ToLower()))
+            {
+                listaExtensiones.Add(GetExtension(d).ToLower());
+            }
+        }
+    }
+
+    void HandleTipoDocChange(ChangeEventArgs e)
+    {
+        string selectedTipoDoc = e.Value?.ToString().ToLower();
+
+        if (!string.IsNullOrEmpty(selectedTipoDoc))
+        {
+            filteredDocs = lstDocDesarrollo.Where(doc => GetExtension(doc).ToLower() == selectedTipoDoc).ToList();
+            StateHasChanged();
+        }
+    }
+
+    private string GetExtension(DocumentoDesarrollo documento)
+    {
+        return Path.GetExtension(documento.Nombre);
+    }
+
+    private string GetWithoutExtension(DocumentoDesarrollo documento)
+    {
+        return Path.GetFileNameWithoutExtension(documento.Nombre);
+    }
+
+    private void OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+        var listaArchivosNuevos = e.GetMultipleFiles();
+        foreach (IBrowserFile f in listaArchivosNuevos)
+        {
+            files.Add(f);
+        }
+    }
+
+    private void SetDragClass()
+    => _dragClass = $"{DefaultDragClass} mud-border-primary";
+
+    private void ClearDragClass()
+    => _dragClass = DefaultDragClass;
+
+
+    private async Task ComponenteFinalizado(Desarrollo desarrollo)
+    {
+        await OnNewDesarollo.InvokeAsync(desarrollo);
+    }
+
+    private async Task CambioIcono()
+    {
+        changeIcon = !changeIcon;
+        await onChangeIcon.InvokeAsync(changeIcon);
+        await OnGetDataDesarrollo.InvokeAsync(desarrollo);
+        await OnGetListaDocumentoDesarrollo.InvokeAsync(lstDocDesarrollo);
+    }
+
+    private async void CambioPanel()
+    {
+        panelInformacion = !panelInformacion;
+        if (!panelInformacion)
+        {
+            desarrollo.Informacion = await QuillHtml.GetHTML();
+        }
+    }
+
+}

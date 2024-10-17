@@ -1,0 +1,152 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Microsoft.EntityFrameworkCore;
+
+@inject AuthenticationStateProvider _auth;
+@inject UserManager<CPMUser> _UserManager
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager _navManager
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudAutocomplete T="CPMUser" Label="Programador" @bind-Value="ProEquipo.Programador" SearchFunc="@Search2" ResetValueOnEmptyText="@resetValueOnEmptyText" CoerceText="@coerceText" 
+                    CoerceValue="@coerceValue" AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary" Required="true" RequiredError="Debe elegir un Usuario para asignar una incidencia">
+                        <ItemTemplate>
+                            @context.Nombre
+                        </ItemTemplate>
+                    </MudAutocomplete>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => Submit())">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Equipo Equipo { get; set; }
+    [Parameter] public ProgramadoresEquipos ProEquipo { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }  
+    
+    List<CPMUser> lstUsers = new List<CPMUser>();
+    MudForm form;
+    public CPMUser users { get; set; }
+    bool success;
+    string[] errors = { };    
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (Equipo != null)
+                {
+                    ProEquipo = new ProgramadoresEquipos { Equipo = Equipo }; 
+                }
+                if (ProEquipo == null)
+                {
+                    ProEquipo = new ProgramadoresEquipos();
+                } 
+                if (ProEquipo.Id != 0 && ProEquipo.Id != null)
+                {
+                    ProEquipo = _ApplicationDbContext.ProgramadoresEquipos.FirstOrDefault(u => u.Id == ProEquipo.Id);
+                }
+                cargaUsuario();
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    private async Task<IEnumerable<CPMUser>> Search2(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstUsers;
+
+        return lstUsers.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(ProEquipo).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (!form.IsValid)
+        {
+            await DialogService.ShowMessageBox("Error", "Formulario no válido");
+            return;
+        }
+
+        try
+        {
+            var existingTeam = await _ApplicationDbContext.Equipos.FirstOrDefaultAsync(e => e.Id == ProEquipo.Equipo.Id);
+
+            if (existingTeam == null)
+            {
+                await DialogService.ShowMessageBox("Error", "Equipo no encontrado en la base de datos");
+                return;
+            }
+
+            var assignedProgrammer = await _ApplicationDbContext.ProgramadoresEquipos
+                .FirstOrDefaultAsync(pe => pe.Programador.Id == ProEquipo.Programador.Id && pe.Equipo.Id == ProEquipo.Equipo.Id);
+
+            if (assignedProgrammer != null)
+            {
+                await DialogService.ShowMessageBox("Error", "El usuario ya está asignado a este equipo");
+                return;
+            }
+
+            ProEquipo.Equipo = existingTeam;
+            _ApplicationDbContext.ProgramadoresEquipos.Add(ProEquipo);
+
+            await _ApplicationDbContext.SaveChangesAsync();
+            MudDialog.Close(DialogResult.Ok<ProgramadoresEquipos>(ProEquipo));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al guardar cambios en la base de datos: {ex.Message}");
+
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Excepción interna: {ex.InnerException.Message}");
+            }
+
+            await DialogService.ShowMessageBox("Error", "Hubo un problema al guardar los cambios en la base de datos.");
+        }
+    }
+
+    void cargaUsuario() => lstUsers = _ApplicationDbContext.Users.ToList();
+}

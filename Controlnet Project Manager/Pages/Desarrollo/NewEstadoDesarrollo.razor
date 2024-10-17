@@ -1,0 +1,111 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+<style>
+    .color {
+        background-color: @EstadoDesarrollo.Color;
+        height: 20px;
+        width: 20px;
+        border: 1px solid #ccc;
+        display: inline-block;
+    }
+</style>
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudPaper>
+                        <MudTextField @bind-Value="EstadoDesarrollo.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudCheckBox @bind-Checked="EstadoDesarrollo.FinalizacionDesarrollo" Label="Finalización del Desarrollo" />
+                        <MudCheckBox @bind-Checked="EstadoDesarrollo.EstadoCl" Label="Estado para Clientes" />
+                        <MudColorPicker Label="Color" @bind-Text="EstadoDesarrollo.Color" Required="true" RequiredError="Debe indicar color" />
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public EstadoDesarrollo EstadoDesarrollo { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        if (EstadoDesarrollo == null)
+        {
+            EstadoDesarrollo = new EstadoDesarrollo();
+        }
+
+        if (EstadoDesarrollo.Id != 0 && EstadoDesarrollo.Id != null)
+        {
+            EstadoDesarrollo = _ApplicationDbContext.EstadosDesarrollos.FirstOrDefault(u => u.Id == EstadoDesarrollo.Id);
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(EstadoDesarrollo).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (EstadoDesarrollo.Id != 0 && EstadoDesarrollo.Id != null)
+                {
+                    _ApplicationDbContext.EstadosDesarrollos.Update(EstadoDesarrollo);
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(EstadoDesarrollo.Nombre))
+                    {
+                        _ApplicationDbContext.EstadosDesarrollos.Add(EstadoDesarrollo);
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del proyecto es obligatorio");
+                        return;
+                    }
+                }
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<EstadoDesarrollo>(EstadoDesarrollo));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+}

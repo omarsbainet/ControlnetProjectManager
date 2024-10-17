@@ -1,0 +1,239 @@
+﻿
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using System.Drawing
+@using System.Globalization
+@using Color = MudBlazor.Color
+@using System.Collections.Immutable
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<CPMUser> _UserManager
+@inject AuthenticationStateProvider _auth
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IDialogService _dialogService;
+@inject NavigationManager _navigationManager;
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                        <MudTextField @bind-Value="usuario.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" />
+                        <MudTextField @bind-Value="usuario.UserName" Label="Usuario" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar usuario" />
+                        <MudTextField @bind-Value="usuario.Email" Label="Email" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="El correo electrónico no puede estar vacío"/>
+                        <MudTextField @bind-Value="usuario.PhoneNumber" Label="Teléfono" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        <MudSelect T="Rol" Value="usuario.Rol" ValueChanged="i => usuario.Rol = i " Label="Rol" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                            @foreach (var r in lstRoles)
+                            {
+                                <MudSelectItem Value="@r">@r.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="CPMUser" Label="Superior" @bind-Value="usuario.Superior" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+                        <MudSelectItem T="CPMUser" Value="null">(Seleccione uno)</MudSelectItem>
+                        @foreach (var r in lstSuperiores)
+                        {
+                            <MudSelectItem Value="@r.Id">@r.Nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudTextField @bind-Value="usuario.UsuarioGitHub" Label="Usuario Github" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="usuario.TokenGitHub" Label="Token" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="usuario.Coste" Label="Coste empleado" Variant="Variant.Outlined" Margin="Margin.Dense" />
+
+
+                    @if (create)
+                        {
+                            <MudTextField @bind-Value="passw" Label="Contraseña" InputType="InputType.Password" Variant="Variant.Outlined" Margin="Margin.Dense" Autocomplete="new-password" Required="true" RequiredError="Debe indicar contraseña" />
+                        }
+                        else
+                        {
+                            <div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px ">
+                            <MudButton @onclick="NewUserDialog" Variant="Variant.Outlined" Color="Color.Primary">
+                                Cambiar clave
+                            </MudButton>
+                                    
+                        <MudButton @onclick="CambiarActivado" Variant="Variant.Outlined" Color="Color.Primary">
+                            @(usuario.Activo==false?"Activar usuario":"Desactivar usuario")
+                        </MudButton>
+                        </div>
+                        }
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter]
+    public MainLayout layout { get; set; }
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public CPMUser usuario { get; set; }
+    [Parameter]
+    public ApplicationDbContext _ApplicationDbContext { get; set; }
+    private bool create { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    private ValidacionSelect validacion = new ValidacionSelect();
+    string pais = "";
+    class ValidacionSelect
+    {   
+        [RegularExpression("^[1-9]?[1-9][0]?$", ErrorMessage = "Debe indicar un rol")]
+        [Required]
+        public int valor { get; set; }
+    }
+    List<Rol> lstRoles;
+    List<CPMUser> lstSuperiores;
+    List<clsSustitucion> lstSustituciones;
+    bool success;
+    string[] errors = { };
+    MudForm form;
+    string passw = "";
+    IEnumerable<System.Security.Claims.Claim> userClaims;
+    /*
+    private void PopulateCountryComboBox()
+    {
+    RegionInfo country = new RegionInfo(new CultureInfo("es-ES", false).LCID);
+    foreach (CultureInfo cul in CultureInfo.GetCultures(CultureTypes.SpecificCultures))
+        {
+        country = new RegionInfo(new CultureInfo(cul.Name, false).LCID);
+        paises.Add(country);
+    }
+    paises = paises.Distinct().OrderBy(it => it.DisplayName).ToList();
+    }*/
+    class clsSustitucion
+    {
+        public string ID { set; get; }
+        public string Nombre { get; set; }
+    }
+
+    private async void CambiarActivado()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+        var parameters = new DialogParameters();
+        parameters.Add("activado", usuario.Activo);
+
+        var title = usuario.Activo == false ? "Activar usuario" : "Desactivar usuario";
+        var dialog = await _dialogService.Show<ConfirmarActivacion>(title, parameters, options).Result;
+
+        if (dialog.Cancelled == false)
+        {
+            usuario.Activo = !usuario.Activo;
+            StateHasChanged();
+        }
+
+    }
+    int idEmpresa;
+    string idPais;
+    int idGenero = 0;
+    string idZonaHoraria;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        //idPais = _httpContextAccessor.HttpContext.Session.GetString("idPaisEmpresa") ?? default(string);
+        //idZonaHoraria = _httpContextAccessor.HttpContext.Session.GetString("idZonaHoraria") ?? default(string);
+
+        if (usuario == null)
+        {
+            usuario = new CPMUser();
+            create = true;
+        }
+
+
+        lstRoles = _ApplicationDbContext.Roles.ToList<Rol>();
+
+        lstSuperiores = usuario==null? _ApplicationDbContext.Users.Where(it => it.Rol.Orden < usuario.Rol.Orden).ToList() : new(); 
+    }
+
+    private async void Submit()
+    {
+        await form.Validate();
+        if (success)
+        {
+            IdentityResult? result = null;
+            if (!create)
+            {
+                _ApplicationDbContext.Users.Update(usuario);
+            }
+            else
+            {
+                usuario.Activo = true;
+                result = await _UserManager.CreateAsync(usuario, passw);
+            }
+
+
+            if (result == null || result.Succeeded)
+            {
+                MudDialog.Close(DialogResult.Ok<CPMUser>(usuario));
+            }
+            else
+            {
+                string errores = "";
+                foreach (IdentityError e in result.Errors)
+                {
+                    errores += e.Description + "<br/>";
+                }
+
+                await DialogService.ShowMessageBox("Error", (MarkupString)errores);
+            }
+
+            await _ApplicationDbContext.SaveChangesAsync();
+            _navigationManager.NavigateTo("/Usuarios", true);
+
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(usuario).Reload();
+    }
+
+
+    private async void NewUserDialog()
+    {
+        
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+
+
+        var dialog = await _dialogService.Show<CambiarClaveUsuario>("Editar clave", options).Result;
+
+
+        if (dialog.Data != null)
+        {
+            string clave = dialog.Data as String;
+
+            var user = await _UserManager.FindByIdAsync(usuario.Id);
+
+            var token = await _UserManager.GeneratePasswordResetTokenAsync(user);
+
+            var result = await _UserManager.ResetPasswordAsync(user, token, clave);
+
+            if (result.Succeeded)
+            {
+
+            }
+            else
+            {
+                string errores = "";
+                foreach (IdentityError e in result.Errors)
+                {
+                    errores += e.Description + "<br/>";
+                }
+
+                await DialogService.ShowMessageBox("Error", (MarkupString)errores);
+            }
+        }
+    }
+}

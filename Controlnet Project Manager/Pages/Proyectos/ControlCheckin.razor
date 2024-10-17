@@ -1,0 +1,184 @@
+@page "/CheckinCheckout"
+@using Microsoft.AspNetCore.Identity;
+@using System.Security.Claims;
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore;
+@using Controlnet_Project_Manager.Data;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+
+@inject UserManager<CPMUser> _UserManager
+@inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
+@inject ApplicationDbContext _ApplicationDbContext
+
+@inject CRUD Crud
+@attribute [Authorize]
+
+@if (!Cargando)
+{
+<ToolBar Title="CHECKIN"></ToolBar>
+
+@if (ultimoCheckinCheckout != null && ultimoCheckinCheckout.Entrada)
+{
+    @if (@ultimoCheckinCheckout.Proyecto.Nombre == ProyectoSelect)
+    {
+        <br />
+        <MudPaper Class="pa-5">
+            <MudList>
+                <MudListItem>Usuario: <strong>@usuario.Nombre</strong></MudListItem>
+                <MudListItem>Tienes check-in en el presente proyecto <strong>@ProyectoSelect</strong></MudListItem>
+                <MudListItem>Fecha check-in: <strong>@ultimoCheckinCheckout.Fecha</strong></MudListItem>
+                <MudListItem>¿Quieres salir de <strong>@ProyectoSelect</strong>?</MudListItem>
+                <MudListItem>
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@(async () => await RegistrarCheckout())">Check-out</MudButton>
+                </MudListItem>
+            </MudList>
+        </MudPaper>
+    }
+    else
+    {
+        <br />
+        <MudPaper Class="pa-5">
+            <MudList>
+                    <MudListItem>Usuario: <strong>@usuario.Nombre</strong></MudListItem>
+                <MudListItem>Estás actualmente dentro del proyecto <strong>@ultimoCheckinCheckout.Proyecto.Nombre.</strong></MudListItem>
+                <MudListItem>Fecha check-in: <strong>@ultimoCheckinCheckout.Fecha</strong></MudListItem>
+                <MudListItem>No puedes hacer check-in en <strong>@ProyectoSelect</strong> hasta que realices check-out.</MudListItem>
+                <MudListItem>¿Quieres salir de <strong>@ultimoCheckinCheckout.Proyecto.Nombre</strong> ?</MudListItem>
+                <MudListItem>
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@(async () => await RegistrarCheckout())">Check-out</MudButton>
+                </MudListItem>
+            </MudList>
+        </MudPaper>
+    }
+}
+else
+{
+    <br />
+    <MudPaper Class="pa-5">
+        <MudList>
+            <MudListItem>¿Quieres hacer check-in en el proyecto <strong>@ProyectoSelect</strong>?</MudListItem>
+            <MudListItem>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="@(() => RegistrarCheckin())">Check-in</MudButton>
+            </MudListItem>
+        </MudList>
+    </MudPaper>
+    }
+}
+else
+{
+    <ToolBar Title="CHECKIN"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    // lista donde recuperar el listado de proyectos de la BD
+    private List<Proyecto> lstProyectos = new List<Proyecto>();
+    // instancia de el´ultimo checkincheckout del usuario activo
+    private CheckinCheckout ultimoCheckinCheckout;
+
+    [Parameter]
+    public string ProyectoSelect { get; set; }
+    [Parameter]
+    public EventCallback<bool> OnBadgeColor { get; set; }
+    [Parameter]
+    public CPMUser usuario { get; set; }
+
+    public CPMUser user { get; set; }
+    public CheckinCheckout nuevoCheckin { get; set; } = new CheckinCheckout();
+    // carga de datos iniciales
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        await ObtenerUsuarioActual();
+        Cargando = false;
+        StateHasChanged();
+        lstProyectos = await _ApplicationDbContext.Proyectos.ToListAsync();
+        ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+        OnBadgeColor.InvokeAsync(ultimoCheckinCheckout?.Entrada == true);
+
+    }
+
+    // registra en la BD un checkin del proyecto en el que se esta situado
+    private async Task RegistrarCheckin()
+    {
+        var proyectoSeleccionado = lstProyectos.FirstOrDefault(p => p.Nombre == ProyectoSelect);
+
+        if (proyectoSeleccionado != null)
+        {
+            nuevoCheckin = new CheckinCheckout();
+            nuevoCheckin.Entrada = true;
+            nuevoCheckin.Fecha = DateTime.Now;
+            nuevoCheckin.Usuario = user;
+            nuevoCheckin.Proyecto = proyectoSeleccionado;
+
+            _ApplicationDbContext.CheckinCheckouts.Add(nuevoCheckin);
+            _ApplicationDbContext.SaveChanges();
+
+            ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+            // Notificar al componente padre sobre el cambio color utilizando el evento
+            await OnBadgeColor.InvokeAsync(true);
+        }
+    }
+
+    // registra en la BD un checkout del proyecto actual
+    private async Task RegistrarCheckout()
+    {
+        var nuevoCheckout = new CheckinCheckout
+            {
+                Entrada = false,
+                Fecha = DateTime.Now,
+                Usuario = user,
+                Proyecto = await ObtenerProyectoActual()
+            };
+
+        _ApplicationDbContext.CheckinCheckouts.Add(nuevoCheckout);
+        await _ApplicationDbContext.SaveChangesAsync();
+        ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+        // Notificar al componente padre sobre el cambio color utilizando el evento
+        await OnBadgeColor.InvokeAsync(false);
+    }
+
+    // obtener el usuario actual
+    private async Task ObtenerUsuarioActual()
+    {
+        // var authenticationState = AuthenticationStateProvider.GetAuthenticationStateAsync().Result;
+        // var user = authenticationState.User;
+
+        // if (user.Identity.IsAuthenticated)
+        // {
+        //     var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            // return _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == userId);
+        // }
+        // return null;
+        user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == usuario.Id);
+    }
+
+    // obtener proyecto
+    private async Task<Proyecto> ObtenerProyectoActual()
+    {
+        if (ultimoCheckinCheckout != null && ultimoCheckinCheckout.Entrada)
+        {
+            return ultimoCheckinCheckout.Proyecto;
+        }
+
+        return null;
+    }
+
+    // obtener el ultimo registro del usuario
+    private async Task<CheckinCheckout> ObtenerUltimoCheckinCheckout()
+    {
+        // var usuarioActual = ObtenerUsuarioActual();
+        var ultimoCheckin = await _ApplicationDbContext.CheckinCheckouts
+            .Where(c => c.Usuario == user)
+            .OrderByDescending(c => c.Fecha)
+            .FirstOrDefaultAsync();
+
+        return ultimoCheckin;
+    }
+}
+

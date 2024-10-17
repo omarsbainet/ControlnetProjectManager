@@ -1,0 +1,10 @@
+﻿<AuthorizeView>
+    <Authorized>
+        <div style="display: flex; justify-content: flex-end; align-items: center; width: 100%;">
+            <a href="Identity/Account/Manage" style="margin-right: 10px;">Bienvenido, @context.User.Identity?.Name</a>
+            <form method="post" action="Identity/Account/Logout">
+                <button type="submit" class="nav-link btn btn-link">Cerrar sesión</button>
+            </form>
+        </div>
+    </Authorized>
+</AuthorizeView>

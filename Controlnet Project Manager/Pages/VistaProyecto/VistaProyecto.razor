@@ -1,0 +1,860 @@
+﻿@page "/VistaProyecto"
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net
+@using System.Net.Mail
+@using System.Text;
+@using System.Xml.Linq
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor;
+@using System.Diagnostics
+@using System.Reflection
+@using System.ComponentModel
+
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDialogService DialogService
+@inject CRUD Crud
+@inject NavigationManager _navigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+@inject MyCustomTheme tema;
+<style>
+    body {
+        background: @(Layout.esModoNocturno() ? $"{tema.Theme.PaletteDark.Background}" : $"{tema.Theme.Palette.Background}");
+    }
+</style>
+<MudToolBar DisableGutters="true" Style="@(Layout.esModoNocturno() ? $"height: 26px; background-color: {tema.Theme.PaletteDark.Primary}; display: flex; align-items: center; justify-content: center;" : $"height: 26px; background-color: {tema.Theme.Palette.Primary}; display: flex; align-items: center; justify-content: center;")">
+    <MudText Typo="Typo.h5" Style="color: white; margin-top: 3px;">Visor de Proyectos</MudText>
+</MudToolBar>
+
+<MudToolBar DisableGutters="true" Class="d-flex" Style="@(Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.PaletteDark.Primary}; padding: 0 10px; justify-content: flex-end;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.Palette.Primary}; padding: 0 10px; justify-content: flex-end;")">
+
+    @if (menuRol != null && !cargando)
+    {
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+
+            <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")" OnClick="@openDialog">
+                <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                    @labelFecha
+                </div>
+                <div style="position: absolute; right: 5px; bottom: 8px;">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" />
+                </div>
+            </MudChip>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center; margin-right: 22.5%;">
+            <MudChip Size="Size.Large" Color="Color.Secondary"  Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                @if (!busquedaExperiencia.HasValue)
+                {
+                    @if (toggleBusqueda)
+                    {
+                        <MudText @onclick="ToggleBusquedaExperiencia" Typo="Typo.h4" Color="Color.Primary" Style="cursor: pointer">></MudText>
+                    }
+                    else
+                    {
+                        <MudText @onclick="ToggleBusquedaExperiencia" Typo="Typo.h4" Color="Color.Primary" Style="cursor: pointer">&lt;</MudText>
+                    }
+
+                    <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                        &nbsp;&nbsp;&nbsp;&nbsp;Filtrar por horas Exp.
+                    </div>
+                }
+
+                <MudNumericField @bind-Value="busquedaExperiencia"
+                                 Style="top: -7.5px; left: 9px; overflow: hidden"
+                                 Class="custom-mudnumericfield"
+                                 @onkeyup="ActualizarFiltro"
+                                 Immediate="true"
+                                 Margin="Margin.Dense"
+                                 DisableUnderLine="true"
+                                 Min="0"
+                                 Max="10000"
+                                 HideSpinButtons="true" />
+
+                @if (busquedaExperiencia.HasValue)
+                {
+                    @if (toggleBusqueda)
+                    {
+                        <MudText Color="Color.Primary">(Mayor o igual)</MudText>
+                    }
+                    else
+                    {
+                        <MudText Color="Color.Primary">(Menor o igual)</MudText>
+                    }
+                }
+            </MudChip>
+        </div>
+
+        <div class="d-flex">
+            <MudCheckBox @bind-Value="@checkboxFiltro" T="bool" Color="Color.Secondary" @onclick="ToggleCheckbox"></MudCheckBox>
+            <MudText Style="padding-top: 13px; padding-right: 20px" Color="Color.Secondary">Mostrar proyectos actuales</MudText>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+            <MudMenu AnchorOrigin="Origin.TopCenter" TransformOrigin="Origin.BottomCenter" Class="mud-menu-custom" MaxHeight="410">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary"  Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @MostrarTextoSeleccionadoTecnologias()
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var tecnologia in tecnologiasFiltro)
+                    {
+                        var isChecked = tecnologiasFiltroSeleccionados.Contains(tecnologia);
+
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@tecnologia" @onclick="@(() => ToggleSeleccion(tecnologia, tecnologiasFiltroSeleccionados))" />
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+            <MudMenu AnchorOrigin="Origin.TopCenter" TransformOrigin="Origin.BottomCenter" Class="mud-menu-custom" MaxHeight="410">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary"  Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @MostrarTextoSeleccionadoProgramadores()
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    <div style="padding: 5px;">
+                        <MudTextField @bind-Value="textoBusqueda"
+                                      Margin="Margin.Dense"
+                                      Placeholder="Buscar..."
+                                      Label="Buscar programador"
+                                      Variant="Variant.Outlined"
+                                      AdornmentIcon="@Icons.Material.Filled.Search"
+                                      Adornment="Adornment.Start" @onkeyup="BuscarProgramador"
+                                      Immediate="true" />
+                    </div>
+                    @foreach (var programador in programadoresFiltrados)
+                    {
+                        var isChecked = programadoresFiltroSeleccionados.Contains(programador);
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@programador" @onclick="@(() => ToggleSeleccion(programador, programadoresFiltroSeleccionados))" />
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+    }
+</MudToolBar>
+
+
+<br /><br /><br />
+
+@if (cargando)
+{
+    <div style="display: flex; justify-content: center; align-items: center;">
+        <MudProgressCircular Color="Color.Dark" Size="Size.Large" Indeterminate="true" />
+    </div>
+}
+else if (menuRol != null)
+{
+    <MudGrid>
+        <div style="display:flex; flex-wrap: wrap; margin:auto; width: 100%">
+            @foreach (var programador in lstProgramadoresProyectosFiltro)
+            {
+                // Mostrar todas las tecnologias de los proyectos en los que un programador ha trabajado
+                var tecnologiasUsuario = programador.DatosProyectos
+                .Where(datos => datos.Tecnologias != null)
+                .SelectMany(datos => datos.Tecnologias.Where(tecnologia => programador.Proyectos.Any(proyecto => proyecto.Id == datos.Proyecto.Id)))
+                .Distinct()
+                .ToList();
+
+                <MudItem xs="12" sm="6" md="3" Style="margin-bottom: 10px;">
+                    <MudPaper Style="height: 425px; padding:10px; margin:10px; border-top: 5px solid lightblue; border-radius: 4px; overflow-y: auto">
+
+                        <div class="d-flex">
+                            <MudImage Alt="CPM" Src="favicon.png" Height="45" Width="45" Class="" Style="margin-right: 6px"></MudImage>
+                            <h3 style="margin-top: 4px; padding-left: 13px">@programador.Programador.Nombre</h3>
+                        </div>
+                        @foreach (var tecnologia in tecnologiasUsuario)
+                        {
+                            var estilo = $"background-color: rgba({GetR(tecnologia.Color)}, {GetG(tecnologia.Color)}, {GetB(tecnologia.Color)}, 0.5)";
+                            <MudChip Style="@estilo">
+                                @tecnologia.Nombre
+                            </MudChip>
+                        }
+                        <br />
+                        <MudDivider Style="border-bottom: 5px solid skyblue;" />
+                        <br />
+                        <div style="max-height: 245px; overflow-y: auto;">
+                            @foreach (var datos in programador.DatosProyectos)
+                            {
+                                @foreach (var proyecto in programador.Proyectos)
+                                {
+                                    if (proyecto != null && proyecto.Estado != null && proyecto.Id == datos.Proyecto.Id)
+                                    {
+                                        <div style="border-left: 4px solid @proyecto.Estado.Color; margin-top: 8px; border-radius: 3.5px;">
+
+                                            <div class="d-flex">
+                                                <MudIcon Icon="@Icons.Material.Filled.BusinessCenter" Size="Size.Medium" Style="margin-bottom: 4px" />
+                                                <MudText Style="margin-top: 3px">&nbsp;@proyecto.Nombre</MudText>
+                                            </div>
+
+                                            <div class="d-flex">
+                                                <MudIcon Icon="@Icons.Material.Filled.ViewList" Size="Size.Medium" />
+                                                <MudText style="margin-top:2px">&nbsp;@proyecto.Estado.Nombre</MudText>
+                                            </div>
+
+                                            <div class="d-flex" style="margin-left: 3px">
+                                                <b style="font-weight: 410">
+                                                    @datos.FechaInicio.Date.ToString("d") ➤
+                                                    @datos.FechaFinal.Date.ToString("d")
+                                                </b>
+                                            </div>
+
+                                            <div style="margin-left: 3px">
+                                                Horas trabajadas: <b style="font-weight: 450">@datos.horasTrabajadas</b>
+                                            </div>
+
+                                            @if (datos.Tecnologias != null)
+                                            {
+                                                foreach (var tecnologia in datos.Tecnologias)
+                                                {
+                                                    var estilo = $"background-color: rgba({GetR(tecnologia.Color)}, {GetG(tecnologia.Color)}, {GetB(tecnologia.Color)}, 0.4)";
+                                                    <MudChip Style="@estilo">
+                                                        @tecnologia.Nombre
+                                                    </MudChip>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                }
+                            }
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            }
+        </div>
+    </MudGrid>
+}
+else if (menuRol == null)
+{
+    <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+}
+
+
+@code {
+
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    List<Proyecto> lstProyectos = new List<Proyecto>();
+    List<Estado> lstEstados = new List<Estado>();
+    List<CheckinCheckout> lstCheckins = new List<CheckinCheckout>();
+    List<CPMUser> lstProgramadores = new List<CPMUser>();
+    List<UsuarioProyectos> lstProgramadoresProyectos = new List<UsuarioProyectos>();
+    List<UsuarioProyectos> lstProgramadoresProyectosFiltro = new List<UsuarioProyectos>();
+    List<string> programadoresFiltroSeleccionados = new List<string>();
+    List<string> programadoresFiltrados = new List<string>();
+    List<string> tecnologiasFiltro = new List<string>();
+    List<string> tecnologiasFiltroSeleccionados = new List<string>();
+    private string textoBusqueda;
+    private int? busquedaExperiencia;
+    List<string> programadoresFiltro = new List<string>();
+    List<string> aux = new List<string>(); // Lista auxiliar que guarda todos los nombres de los programadores siempre, para facilitar la busqueda
+    private DateTime? fechaInicio = DateTime.Today;
+    private DateTime? fechaFin = DateTime.Now.AddDays(1);
+    private bool estaFechaPuesta = false;
+    private string labelFecha = "Seleccionar Fecha";
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    public CPMUser usuario { get; set; }
+    private bool cargando = true;
+    private bool checkboxFiltro { get; set; }
+    private bool toggleBusqueda = true; // < o > del filtro por horas de experiencia
+
+    // Método para obtener el componente rojo (R) de un color hexadecimal
+    int GetR(string colorHex) => Convert.ToInt32(colorHex.Substring(1, 2), 16);
+
+    // Método para obtener el componente verde (G) de un color hexadecimal
+    int GetG(string colorHex) => Convert.ToInt32(colorHex.Substring(3, 2), 16);
+
+    // Método para obtener el componente azul (B) de un color hexadecimal
+    int GetB(string colorHex) => Convert.ToInt32(colorHex.Substring(5, 2), 16);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        // 
+         await obtenerUsuario();
+         url = GetLastSegmentUrl();
+         idMenu = GetIdMenu(url);
+         menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        // //
+        await cargarProyectosYTecnologias();
+        await cargarEstados();
+        await cargarProgramadores();
+        await asignarProyectosAProgramadores();
+        await asignarTecnologiasAProyectos();
+        ActualizarFiltro();
+         cargando = false;
+    }
+
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    // Método para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+
+    private async Task cargarProyectosYTecnologias()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        lstProyectos = await ctx.Proyectos.Include(p => p.Programadores).Include(p => p.Cliente).Include(p => p.Estado).ToListAsync();
+        tecnologiasFiltro = await ctx.Tecnologias.Where(p => p.EstaActivo).Select(p => p.Nombre).ToListAsync();
+
+    }
+
+    private void ToggleBusquedaExperiencia()
+    {
+        if (!toggleBusqueda)
+        {
+            toggleBusqueda = true;
+        } 
+        else
+        {
+            toggleBusqueda = false;
+        }
+    }
+
+    private async Task cargarEstados()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        lstEstados = await ctx.Estados.ToListAsync();
+    }
+
+    private async Task cargarProgramadores()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        lstProgramadores = await ctx.Users.ToListAsync();
+    }
+
+    private async Task asignarProyectosAProgramadores()
+    {
+
+        // Asignar los proyectos correspondientes a cada programador
+        List<IGrouping<CPMUser, CheckinCheckout>> lstChkn = await obtenerCheckinsAgrupados();
+
+
+        lstProgramadoresProyectos = lstChkn
+            .Select(group => new UsuarioProyectos
+                {
+                    Programador = group.Key,
+                    Proyectos = group.Select(p => p.Proyecto).Distinct().ToList()
+                }).OrderByDescending(p => p.Proyectos.Count()).ToList();
+
+
+        // Asignar la fecha inicial, final y las horas trabajadas de cada programador en cada proyecto
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var listaAgrupados = await ctx.CheckinCheckouts
+        .Include(p => p.Proyecto)
+        .ThenInclude(p => p.Estado)
+        .Include(p => p.Usuario)
+        .ThenInclude(p => p.Rol)
+        .GroupBy(p => new { UsuarioId = p.Usuario.Id, ProyectoId = p.Proyecto.Id })
+        .ToListAsync();
+
+        foreach (var prog in lstProgramadoresProyectos)
+        {
+            foreach (var proy in prog.Proyectos)
+            {
+                foreach (var programador in listaAgrupados)
+                {
+                    if (programador.Key.UsuarioId == prog.Programador.Id && programador.Key.ProyectoId == proy.Id) 
+                    {
+                        var listado = programador.ToList();
+
+                        DateTime fechaInicio = listado.Min(chk => chk.Fecha);
+                        DateTime fechaFinal = listado.Max(chk => chk.Fecha);
+
+                        int horasPorUsuarioPorProyecto = calculoUsuarioProyecto(listado);
+
+                        DatosProyectos proyectoConFechas = new DatosProyectos
+                            {
+                                Proyecto = proy,
+                                FechaInicio = fechaInicio,
+                                FechaFinal = fechaFinal,
+                                horasTrabajadas = horasPorUsuarioPorProyecto
+                            };
+
+                        // Agregar el objeto ProyectoConFechas a la lista DatosProyectos
+                        if (prog.DatosProyectos == null)
+                        {
+                            prog.DatosProyectos = new List<DatosProyectos>();
+                        }
+                        prog.DatosProyectos.Add(proyectoConFechas);
+
+                    }
+                }
+            }
+            prog.DatosProyectos = prog.DatosProyectos.OrderBy(p => p.FechaFinal).ToList();
+        }
+
+
+
+        @*
+        foreach (var programador in lstProgramadoresProyectos)
+        {
+            lstCheckinsFecha = await obtenerCheckinsPorUsuario(programador.Programador.Id);
+
+            foreach (var proyecto in programador.Proyectos)
+            {
+                // Filtrar los check-ins del proyecto y programador actual
+                var checkinsProyecto = lstCheckinsFecha.Where(p => p.Proyecto.Id == proyecto.Id);
+
+                // Obtener la fecha mínima y máxima de los checks
+                DateTime fechaInicio = checkinsProyecto.Min(chk => chk.Fecha);
+                DateTime fechaFinal = checkinsProyecto.Max(chk => chk.Fecha);
+
+                int horasPorUsuarioPorProyecto = calculoUsuarioProyecto(checkinsProyecto);
+
+                DatosProyectos proyectoConFechas = new DatosProyectos
+                    {
+                        Proyecto = proyecto,
+                        FechaInicio = fechaInicio,
+                        FechaFinal = fechaFinal,
+                        horasTrabajadas = horasPorUsuarioPorProyecto
+                    };
+
+                // Agregar el objeto ProyectoConFechas a la lista DatosProyectos
+                if (programador.DatosProyectos == null)
+                {
+                    programador.DatosProyectos = new List<DatosProyectos>();
+                }
+                programador.DatosProyectos.Add(proyectoConFechas);
+
+
+            }
+            programador.DatosProyectos = programador.DatosProyectos.OrderBy(p => p.FechaFinal).ToList(); // Ordenado por fin de periodo de cada proyecto
+        }
+        *@
+
+        programadoresFiltrados = lstChkn.Select(p => p.Key.Nombre).Distinct().OrderBy(p => p).ToList(); // Lista de programadores solo relevantes al filtrado
+        aux.Clear(); 
+        aux.AddRange(programadoresFiltrados); // Lista auxiliar que guarda todos los nombres de los programadores siempre, para facilitar la busqueda
+
+    }
+
+
+    private async void openDialog()
+    {
+        var parameters = new DialogParameters();
+        parameters.Add("dateRange", new DateRange() { Start = fechaInicio, End = fechaFin });
+        var options = new DialogOptions { CloseOnEscapeKey = true, CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var result = await (await DialogService.ShowAsync<DateRangePickerDialog>("", parameters, options)).Result;
+
+        if (!result.Canceled)
+        {
+            var dates = (DateRange)result.Data;
+            fechaInicio = dates.Start;
+
+            if (dates.End.HasValue) // Para que no salte excepción al asignarle hora/min/sec
+            {
+                fechaFin = dates.End.Value.AddHours(23).AddMinutes(59).AddSeconds(59);
+            }
+            else
+            {
+                fechaFin = dates.End;
+            }
+
+            estaFechaPuesta = fechaInicio.HasValue && fechaFin.HasValue;
+            // Reset filtro programadores si se establece o elimina el rango de fechas
+            if (estaFechaPuesta || !estaFechaPuesta)
+            {
+                programadoresFiltroSeleccionados.Clear();
+                cargarLabelSelector();
+            }
+
+            //await cargarCheckinsFecha(fechaInicio, fechaFin);
+            await asignarProyectosAProgramadores();
+            await asignarTecnologiasAProyectos();
+            cargarLabelSelector();
+            ActualizarFiltro();
+
+        }
+        StateHasChanged();
+
+    }
+
+    private void cargarLabelSelector()
+    {
+        if (estaFechaPuesta)
+        {
+            labelFecha = fechaInicio.Value.ToString("dd-MM-yyyy") + " ➤ " + fechaFin.Value.ToString("dd-MM-yyyy");
+        }    
+        else
+        {
+            labelFecha = "Seleccionar Fecha";
+        }
+        InvokeAsync(StateHasChanged);
+    }
+
+
+    string MostrarTextoSeleccionadoProgramadores()
+    {
+        if (programadoresFiltroSeleccionados.Count() == 0)
+        {
+            return "Programador";
+        }
+
+        if (programadoresFiltroSeleccionados.Count() == 1)
+        {
+            return programadoresFiltroSeleccionados.First();
+        }
+
+        else
+        {
+            return "2 Programadores o más seleccionados";
+        }
+
+    }
+
+    string MostrarTextoSeleccionadoTecnologias()
+    {
+        if (tecnologiasFiltroSeleccionados.Count() == 0) return "Tecnologías";
+        if (tecnologiasFiltroSeleccionados.Count() == 1) return tecnologiasFiltroSeleccionados.First();
+        else return "2 o más tecnologías seleccionadas";
+    }
+
+    void ToggleSeleccion(string valorProgramador, List<string> lista) 
+    {
+        if (lista.Contains(valorProgramador))
+        {
+            lista.Remove(valorProgramador);
+        }
+        else
+        {
+            lista.Add(valorProgramador);
+        }
+
+        ActualizarFiltro();
+
+    }
+
+    void ActualizarFiltro()
+    {
+        lstProgramadoresProyectosFiltro.Clear();
+        var filtroProgramadoresActivo = programadoresFiltroSeleccionados.Any();
+        var filtroTecnologiasActivo = tecnologiasFiltroSeleccionados.Any();
+        var filtroProyectosActualesActivo = checkboxFiltro;
+        var filtroExperienciaActivo = busquedaExperiencia.HasValue;
+        var filtrosExperienciaYTecnologiaActivos = tecnologiasFiltroSeleccionados.Any() && busquedaExperiencia.HasValue;
+
+        IEnumerable<UsuarioProyectos> proyectosFiltrados = lstProgramadoresProyectos;
+
+        if (filtroProgramadoresActivo)
+        {
+            proyectosFiltrados = proyectosFiltrados
+                .Where(item => programadoresFiltroSeleccionados.Contains(item.Programador.Nombre));
+        }
+
+        if (filtroTecnologiasActivo && !filtrosExperienciaYTecnologiaActivos)
+        {
+            proyectosFiltrados = proyectosFiltrados
+                .Where(item => item.DatosProyectos.Any(datos =>
+                    datos.Tecnologias != null && datos.Tecnologias
+                        .Any(tecno => tecnologiasFiltroSeleccionados.Contains(tecno.Nombre))));
+        }
+
+        if (filtroProyectosActualesActivo)
+        {
+            proyectosFiltrados = proyectosFiltrados.Select(group =>
+            {
+                var pFiltrados = group.Proyectos.Where(p => !p.Estado.Oculto).ToList();
+                return new UsuarioProyectos
+                    {
+                        Programador = group.Programador,
+                        Proyectos = pFiltrados,
+                        DatosProyectos = group.DatosProyectos
+                    };
+            }).ToList();
+        }
+
+        if (filtroExperienciaActivo && !filtrosExperienciaYTecnologiaActivos)
+        {
+
+            if (toggleBusqueda) // Mayor o igual que (>)
+            {
+                proyectosFiltrados = proyectosFiltrados
+                .Where(group => group.DatosProyectos.Any(p => p.horasTrabajadas >= busquedaExperiencia)) // Primero filtra los grupos
+                .Select(group =>
+                {
+                    var pFiltrados = group.DatosProyectos.Where(p => p.horasTrabajadas >= busquedaExperiencia).ToList();
+                    return new UsuarioProyectos
+                        {
+                            Programador = group.Programador,
+                            Proyectos = group.Proyectos,
+                            DatosProyectos = pFiltrados
+                        };
+                }).ToList();
+            }
+            else // Menor o igual que (<)
+            {
+                proyectosFiltrados = proyectosFiltrados
+                .Where(group => group.DatosProyectos.Any(p => p.horasTrabajadas <= busquedaExperiencia)) // Primero filtra los grupos
+                .Select(group =>
+                {
+                    var pFiltrados = group.DatosProyectos.Where(p => p.horasTrabajadas <= busquedaExperiencia).ToList();
+                    return new UsuarioProyectos
+                        {
+                            Programador = group.Programador,
+                            Proyectos = group.Proyectos,
+                            DatosProyectos = pFiltrados
+                        };
+                }).ToList();
+            }
+
+        }
+
+        if (filtrosExperienciaYTecnologiaActivos)
+        {
+            if (toggleBusqueda) // Mayor o igual que (>)
+            {
+                proyectosFiltrados = proyectosFiltrados
+                .Where(group =>
+
+                    group.DatosProyectos.Any(p => p.horasTrabajadas >= busquedaExperiencia) &&
+
+                    group.DatosProyectos.Any(p =>
+                        p.Tecnologias != null &&
+                        p.Tecnologias.Any(tecno => tecnologiasFiltroSeleccionados.Contains(tecno.Nombre))))
+                .Select(group =>
+                {
+                    // Filtra y conserva solo los proyectos que cumplen ambos criterios
+                    var pFiltrados = group.DatosProyectos
+                        .Where(p =>
+                            p.horasTrabajadas >= busquedaExperiencia &&
+                            p.Tecnologias != null &&
+                            p.Tecnologias.Any(tecno => tecnologiasFiltroSeleccionados.Contains(tecno.Nombre)))
+                        .ToList();
+
+                    return new UsuarioProyectos
+                        {
+                            Programador = group.Programador,
+                            Proyectos = group.Proyectos,
+                            DatosProyectos = pFiltrados
+                        };
+                })
+                .Where(group => group.DatosProyectos.Any())
+                .ToList();
+            }
+            else // Menor o igual que (<)
+            {
+                proyectosFiltrados = proyectosFiltrados
+                .Where(group =>
+
+                    group.DatosProyectos.Any(p => p.horasTrabajadas <= busquedaExperiencia) &&
+
+                    group.DatosProyectos.Any(p =>
+                        p.Tecnologias != null &&
+                        p.Tecnologias.Any(tecno => tecnologiasFiltroSeleccionados.Contains(tecno.Nombre))))
+                .Select(group =>
+                {
+                    // Filtra y conserva solo los proyectos que cumplen ambos criterios
+                    var pFiltrados = group.DatosProyectos
+                        .Where(p =>
+                            p.horasTrabajadas <= busquedaExperiencia &&
+                            p.Tecnologias != null &&
+                            p.Tecnologias.Any(tecno => tecnologiasFiltroSeleccionados.Contains(tecno.Nombre)))
+                        .ToList();
+
+                    return new UsuarioProyectos
+                        {
+                            Programador = group.Programador,
+                            Proyectos = group.Proyectos,
+                            DatosProyectos = pFiltrados
+                        };
+                })
+                .Where(group => group.DatosProyectos.Any())
+                .ToList();
+            }
+
+        }
+
+        lstProgramadoresProyectosFiltro.AddRange(proyectosFiltrados);
+    }
+
+    void ToggleCheckbox()
+    {
+        if (!checkboxFiltro)
+        {
+            checkboxFiltro = true;
+        }
+        else
+        {
+            checkboxFiltro = false;
+        }
+
+        ActualizarFiltro();
+    }
+
+
+    void BuscarProgramador(KeyboardEventArgs args)
+    {
+        programadoresFiltrados.Clear();
+
+        if (String.IsNullOrEmpty(textoBusqueda))
+        {
+            // Si no hay texto, mostrar todos los programadores usando la lista auxiliar que siempre guarda todos los valores
+            programadoresFiltrados.AddRange(aux);
+        }
+        else
+        {
+            textoBusqueda = textoBusqueda.Trim();
+            // Filtrar los programadores que coincidan con el texto de búsqueda ignorando discrepancias entre mayúscula y minúscula
+            programadoresFiltrados = aux.Where(programador => programador.Contains(textoBusqueda, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        StateHasChanged(); // Actualiza la interfaz de usuario para reflejar los cambios
+    }
+
+
+    private async Task<List<IGrouping<CPMUser, CheckinCheckout>>> obtenerCheckinsAgrupados()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        List<IGrouping< CPMUser, CheckinCheckout >> lista = new();
+
+        if (estaFechaPuesta)
+        {
+            return lista = await ctx.CheckinCheckouts.Include(p => p.Proyecto).ThenInclude(p => p.Estado).Include(p => p.Usuario).ThenInclude(p => p.Rol).Where(p => p.Fecha >= fechaInicio && p.Fecha < fechaFin).GroupBy(p => p.Usuario).ToListAsync();
+        }
+        else
+        {
+            return lista = await ctx.CheckinCheckouts.Include(p => p.Proyecto).ThenInclude(p => p.Estado).Include(p => p.Usuario).ThenInclude(p => p.Rol).Where(p => p.Fecha >= fechaInicio && p.Fecha < fechaFin).GroupBy(p => p.Usuario).ToListAsync();
+          
+        }
+    }
+    
+
+
+    private int calculoUsuarioProyecto(IEnumerable<CheckinCheckout> checkins)
+    {
+        double horas = 0;
+
+        var lista = checkins.OrderBy(p => p.Fecha).ToList();
+
+        foreach (var check in lista)
+        {
+            horas = 0;
+            DateTime? ultimoCheckin = null;
+
+            for (int i = 0; i < lista.Count(); i++)
+            {
+                var registroActual = lista[i];
+                if (registroActual.Entrada)
+                {
+                    ultimoCheckin = registroActual.Fecha;
+                }
+
+                else if (ultimoCheckin.HasValue)
+                {
+                    if (ultimoCheckin.Value.Date == registroActual.Fecha.Date) // Comprobar si la entrada y la salida están en el mismo día.
+                    {
+                        var diferencia = registroActual.Fecha - ultimoCheckin.Value;
+                        horas += diferencia.TotalHours * (double)check.Usuario.Rol.PorcentajeConversion;
+                    }
+                }
+            }
+        }
+
+        return Convert.ToInt32(horas);
+    }
+
+    private async Task asignarTecnologiasAProyectos()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        List<Tecnologia> lstTecnologias = await ctx.Tecnologias.Where(p => p.EstaActivo).ToListAsync(); // Filtrar por tecnologías activas
+        List<ProyectoTecnologia> lstProyectoTecnologia = await ctx.ProyectosTecnologias.Include(p => p.Tecnologia).Include(p => p.Proyecto).ToListAsync();
+        //lstProyectos
+
+        var lstTecnologiasPorProyecto = from proyecto in lstProyectos
+                                        join proyectoTecnologia in lstProyectoTecnologia
+                                        on proyecto.Id equals proyectoTecnologia.Proyecto.Id
+                                        join tecnologia in lstTecnologias
+                                        on proyectoTecnologia.Tecnologia.Id equals tecnologia.Id
+                                        group tecnologia by proyecto into g
+                                        select new
+                                        {
+                                            Proyecto = g.Key,
+                                            Tecnologias = g.ToList()
+                                        };
+
+        // Recorrer listas y asignar las tecnologias
+        foreach (var programadorProyecto in lstProgramadoresProyectos)
+        {
+            foreach (var datosProyecto in programadorProyecto.DatosProyectos)
+            {
+                foreach (var tecnologiasPorProyecto in lstTecnologiasPorProyecto)
+                {
+                    if (tecnologiasPorProyecto.Proyecto.Id == datosProyecto.Proyecto.Id)
+                    {
+                        datosProyecto.Tecnologias = tecnologiasPorProyecto.Tecnologias;
+                    }
+                }
+            }
+        }
+
+
+    }
+
+}

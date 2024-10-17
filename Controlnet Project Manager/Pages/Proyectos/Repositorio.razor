@@ -1,0 +1,244 @@
+@page "/Repositorio"
+@using Microsoft.AspNetCore.Identity;
+@using System.Security.Claims;
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.EntityFrameworkCore;
+@using Controlnet_Project_Manager.Data;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Newtonsoft.Json.Linq;
+@using Octokit;
+@using System.Text;
+
+@if (!Cargando)
+{
+<ToolBar Title="Información"></ToolBar>
+        <br />
+        <MudPaper Class="pa-5">
+        <MudGrid>
+            <MudItem xs="12" sm="12" md="6">
+                <MudChart ChartType="MudBlazor.ChartType.Line" ChartSeries="@Series" @bind-SelectedIndex="Index" XAxisLabels="@XAxisLabels" Width="100%" Height="350px" ChartOptions="@Options" />
+                <MudAutocomplete T="string" Label="Ramas" @bind-Value="branch" SearchFunc="@ListarRamasFiltro">
+                </MudAutocomplete>
+                <MudButton ButtonType="ButtonType.Button" Variant="Variant.Filled" Color="Color.Primary"
+                           Class="ml-auto mt-3 mb-3" OnClick="@ÚltimoCommit">Actualizar</MudButton>
+            </MudItem>
+            <MudItem xs="12" sm="12" md="6">
+                <MudTimeline>
+                    <MudTimelineItem Color="@(commitMerge1.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Size="MudBlazor.Size.Small">
+                        <ItemContent>
+                            <MudText Color="@(commitMerge1.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Typo="Typo.h6" GutterBottom="true">@commitMerge1.Autor</MudText>
+                                <MudText>@commitMerge1.Comentario</MudText>
+                                <MudText>@commitMerge1.Fecha</MudText>
+                            </ItemContent>
+                        </MudTimelineItem>
+                        <MudTimelineItem Color="@(commitMerge2.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Size="MudBlazor.Size.Small">
+                            <ItemOpposite>
+                                <MudText Color="@(commitMerge2.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Typo="Typo.h6" GutterBottom="true">@commitMerge2.Autor</MudText>
+                                <MudText>@commitMerge2.Comentario</MudText>
+                                <MudText>@commitMerge2.Fecha</MudText>
+                            </ItemOpposite>
+                        </MudTimelineItem>
+                        <MudTimelineItem Color="@(commitMerge3.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Size="MudBlazor.Size.Small">
+                            <ItemContent>
+                                <MudText Color="@(commitMerge3.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Typo="Typo.h6" GutterBottom="true">@commitMerge3.Autor</MudText>
+                                <MudText>@commitMerge3.Comentario</MudText>
+                                <MudText>@commitMerge3.Fecha</MudText>
+                            </ItemContent>
+                        </MudTimelineItem>
+                        <MudTimelineItem Color="@(commitMerge4.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Size="MudBlazor.Size.Small">
+                            <ItemOpposite>
+                                <MudText Color="@(commitMerge4.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Typo="Typo.h6" GutterBottom="true">@commitMerge4.Autor</MudText>
+                                <MudText>@commitMerge4.Comentario</MudText>
+                                <MudText>@commitMerge4.Fecha</MudText>
+                            </ItemOpposite>
+                        </MudTimelineItem>
+                        <MudTimelineItem Color="@(commitMerge5.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Size="MudBlazor.Size.Small">
+                            <ItemContent>
+                                <MudText Color="@(commitMerge5.EsCommit ? MudBlazor.Color.Success : MudBlazor.Color.Error)" Typo="Typo.h6" GutterBottom="true">@commitMerge5.Autor</MudText>
+                                <MudText>@commitMerge5.Comentario</MudText>
+                                <MudText>@commitMerge5.Fecha</MudText>
+                            </ItemContent>
+                        </MudTimelineItem>
+                    </MudTimeline>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+}
+else
+{
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+ 
+
+@code {
+    [Parameter]
+    public Proyecto proyecto { get; set; }
+
+    private readonly HttpClient client = new HttpClient();
+    static string repo; // Repositorio
+    static string branch; // Rama
+
+    List<CommitMerge> commitsRef; //Lista que recoge todos los Commits y Merge del repositorio y de la rama
+
+    //Variables que almacenan los últimos 5 Commits y los Merges
+    static CommitMerge commitMerge1 = new CommitMerge("Cargando Datos", "", DateTimeOffset.Now, true);
+    static CommitMerge commitMerge2 = new CommitMerge("Cargando Datos", "", DateTimeOffset.Now, true);
+    static CommitMerge commitMerge3 = new CommitMerge("Cargando Datos", "", DateTimeOffset.Now, true);
+    static CommitMerge commitMerge4 = new CommitMerge("Cargando Datos", "", DateTimeOffset.Now, true);
+    static CommitMerge commitMerge5 = new CommitMerge("Cargando Datos", "", DateTimeOffset.Now, true);
+
+    //Variables que nos dibujará el gráfico
+
+    private int Index = -1; //default value cannot be 0 -> first selectedindex is 0.
+    public MudBlazor.ChartOptions Options = new MudBlazor.ChartOptions();
+
+    //A más arrays, más líneas tendrá el gráfico
+    public List<ChartSeries> Series = new List<ChartSeries>()
+    {
+        new ChartSeries() { Name = "master", Data = new double[] { 20, 20, 20, 20, 20 } }, //Master
+        new ChartSeries() { Name = branch, Data = new double[] { 20, 20, 20, 20, 20 } }, //Branch
+    };
+
+    public string[] XAxisLabels = { "1", "2", "3", "4", "5" };
+
+    private bool Cargando = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Cargando = false;    
+        await base.OnInitializedAsync();
+
+        if (proyecto.NombreRepositorioGitHub != null)
+        {
+            await ÚltimoCommit();
+        }
+        StateHasChanged();
+    }
+
+    //Método que nos conectará con la API de Github y nos recogerá los commits y merges
+    async Task ÚltimoCommit()
+    {
+        List<string> ramasList = await ListarRamasAsync();
+        string owner = proyecto.OwnerRepositorioGithub.UsuarioGitHub; // Dueño del repositorio
+        string token = proyecto.OwnerRepositorioGithub.TokenGitHub; // Token
+        repo = proyecto.NombreRepositorioGitHub; // Nombre del proyecto o del repositorio
+        commitsRef = new List<CommitMerge>();
+
+        var github = new GitHubClient(new ProductHeaderValue(repo))
+            {
+                Credentials = new Credentials(token) // NOTA: Token
+            };
+        var request = new CommitRequest { Sha = branch };
+        var commits = await github.Repository.Commit.GetAll(owner, repo, request);
+        var lastFiveCommits = commits.Take(5); //Recoger los últimos 5 commits
+
+        // Recorrer los commits
+        foreach (var commit in lastFiveCommits)
+        {
+            CommitMerge commitList = new CommitMerge(commit.Author.Login, commit.Commit.Message, commit.Commit.Author.Date, true);
+            commitsRef.Add(commitList); //Agregar en la lista de commits y merges
+        }
+
+        var pullRequestBranch = new PullRequestRequest
+            {
+                State = ItemStateFilter.Closed,
+                Base = "master",  // La rama a la que se fusionan los cambios
+                Head = branch  // La rama desde la que se proponen los cambios
+            };
+
+        var pullRequests = await github.PullRequest.GetAllForRepository(owner, repo, pullRequestBranch);
+
+        var mergedPRs = pullRequests.Where(pr => pr.Merged).OrderByDescending(pr => pr.MergedAt).Take(5); // Recoger los últimos 5 merges
+
+        // Recorrer los merges
+        foreach (var pr in mergedPRs)
+        {
+            var commit = await github.Repository.Commit.Get(owner, repo, pr.MergeCommitSha);
+            if (pr.Head.Ref.Equals(branch))
+            {
+                CommitMerge mergeList = new CommitMerge(commit.Author.Login, commit.Commit.Message, commit.Commit.Author.Date, false);
+                commitsRef.Add(mergeList); //Agregar en la lista de commits y merges
+            }
+
+        }
+
+        // Ordenar la lista
+        commitsRef.Sort();
+
+        commitMerge1 = commitsRef[0];
+        commitMerge2 = commitsRef[1];
+        commitMerge3 = commitsRef[2];
+        commitMerge4 = commitsRef[3];
+        commitMerge5 = commitsRef[4];
+
+        DibujarChart(); // Redibujar el gráfico
+    }
+
+    public void DibujarChart()
+    {
+        Series[1].Data = new double[] { 20, 20, 20, 20, 20 }; //Por defecto está en el mismo valor que Master
+
+
+        if (commitMerge1.EsCommit)
+            Series[1].Data[4] = 10; //Cuando haga Commit saldrá de la línea Master
+        else
+            Series[1].Data[4] = 20; //Cuando haga Merge volverá a la línea Master
+
+        if (commitMerge2.EsCommit)
+            Series[1].Data[3] = 10;
+        else
+            Series[1].Data[3] = 20;
+
+        if (commitMerge3.EsCommit)
+            Series[1].Data[2] = 10;
+        else
+            Series[1].Data[2] = 20;
+
+        if (commitMerge4.EsCommit)
+            Series[1].Data[1] = 10;
+        else
+            Series[1].Data[1] = 20;
+
+        if (commitMerge5.EsCommit)
+            Series[1].Data[0] = 10;
+        else
+            Series[1].Data[0] = 20;
+
+    }
+
+    //Función que te devolverá una lista de todas las ramas del repositorio para filtrarlas en el autocomplete
+    private async Task<List<string>> ListarRamasAsync()
+    {
+        var github = new GitHubClient(new ProductHeaderValue("Proyecto"));
+        string owner = proyecto.OwnerRepositorioGithub.UsuarioGitHub;
+        string token = proyecto.OwnerRepositorioGithub.TokenGitHub;
+        string repo = proyecto.NombreRepositorioGitHub; 
+        github.Credentials = new Credentials(token);
+
+        var ramas = await github.Repository.Branch.GetAll(owner, repo); 
+
+        List<string> ramasList = ramas.Select(b => b.Name).ToList();
+
+        return ramasList;
+    }
+
+    //Filtro para las ramas del autocomplete
+    private async Task<IEnumerable<String>> ListarRamasFiltro(string value)
+    {
+
+        await Task.Delay(5);
+
+        List<string> ramasList = await ListarRamasAsync();
+        if (string.IsNullOrEmpty(value))
+            return null;
+
+        return ramasList
+            .Where(p => p.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+
+    }
+
+}
+

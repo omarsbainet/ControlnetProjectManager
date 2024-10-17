@@ -1,0 +1,1318 @@
+﻿@using Controlnet_Project_Manager.Pages.Incidencia
+@using Controlnet_Project_Manager.Pages.VistaTrabajo
+@using GemBox.Spreadsheet
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using System.Reflection;
+@using System.ComponentModel;
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using Heron.MudCalendar
+@using System.Data
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+@inject MyCustomTheme tema;
+@inject ISnackbar Snackbar;
+@inject FileService fileService;
+
+
+
+<style>
+    .text-task {
+        font-size: 18px;
+        color: #90A4AE;
+    }
+    .texto-oscuro{
+        font-size:18px;
+        color:#fff;
+    }
+    .text-task-black {
+        font-size: 18px;
+        color: #000;
+    }
+
+    .text-task-red {
+        font-size: 18px;
+        color: red;
+    }
+
+    .center-paper{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .center-paper-dark{
+         display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: @tema.Theme.PaletteDark.Surface;
+    }
+    .cell-template{
+        border: 1px solid @tema.Theme.Palette.Primary;
+        color: @tema.Theme.Palette.Primary;
+        background-color: @tema.Theme.Palette.Background;
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: 5px;
+    }
+
+    .cell-template-dark{
+        border: 1px solid @tema.Theme.PaletteDark.Primary;
+        color: white;
+        background-color: @tema.Theme.PaletteDark.Background;
+        margin-top: 5px;
+        margin-left: 5px;
+        margin-right: 5px;
+    }
+    .mud-switch {
+        position: absolute;
+        top: 20px;
+        left: 80%;
+    }
+    .btnExcel{
+        position:absolute;
+        margin-left: 285px;
+        margin-top: 24px;
+    }
+
+/*     .mud-cal-month-cell-title {
+        visibility: hidden;
+    } */
+
+</style>
+@if (!Cargando)
+{
+    @if (id != null)
+    {
+
+        <div style="display: flex; justify-content: space-between; gap: 20px;">
+
+            <MudPaper Class="pa-5" Style="@((Layout.esModoNocturno() ? $"background-color: {tema.Theme.PaletteDark.Surface.ToString()}; width:100%;" : "width: 100%;"))">
+                <div style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                    <MudText Style="@((Layout.esModoNocturno() ? $"font-size: 1.5em; color:white;" : "font-size: 1.5em;"))"><strong>Información del Proyecto</strong></MudText>
+                    <br />
+                    <div style="display: flex; gap: 20px; width: 100%;">
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task"))">Fecha Contrato</span>
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black"))">@proyecto.FechaPrevistaContrato.ToString("dd/MM/yy")</span>
+                            </MudPaper>
+                        </div>
+
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task"))">Fecha Entrega</span>
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black"))">@proyecto.FechaPrevistaEntrega.ToString("dd/MM/yy")</span>
+                            </MudPaper>
+                        </div>
+
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task"))">Horas estimadas</span>
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black"))">@proyecto.HorasEstimadas h.</span>
+                            </MudPaper>
+                        </div>
+                        
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task"))">Horas estimadas por semana</span>
+                                @if (CalcularHorasSemanales() > 0 && horasSemanales / CalcularHorasSemanales() > 40)
+                                {
+                                    <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task-red"))">@horasSemanales h.</span>
+                                }
+                                else
+                                {
+                                    <span class="@((Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black"))">@horasSemanales h.</span>
+                                }
+                            </MudPaper>
+                        </div>
+
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <div style="display: flex;">
+                                    <div style="flex-grow: 1; display: flex; flex-direction: column;">
+                                        <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task")">Horas realizadas</span>
+                                        <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black")">@horasRealizadas h.</span>
+                                    </div>
+                                    <div style="flex-grow: 1; display: flex; margin-right: 30px; margin-left: 10px; background-color: aqua">
+                                        <div style="margin-top: -25px">
+                                            <MudDateRangePicker Style="@((Layout.esModoNocturno() ? "width: 0px;color:white" : "width:0px"))" PickerClosed="DiferenciaHorasCalendario" AutoClose="true" Editable="true" AdornmentIcon="@Icons.Material.Filled.FilterAlt" @bind-DateRange="rangoFechas"/>
+                                        </div>
+                                        <div style="margin-top: -10px">
+                                            <div style="@((Layout.esModoNocturno() ? $"position: absolute; transform: translate(5%, 5%); background-color: {tema.Theme.PaletteDark.Surface.ToString()}; width: 40px; height: 40px; border-radius: 50%; z-index:1" : "position: absolute; transform: translate(5%, 5%); background-color: white; width: 40px; height: 40px; border-radius: 50%; z-index:1"))"></div>
+                                            <div style="z-index: 2; position: absolute;">
+                                                <MudIconButton @onclick="ClearHorasTotales" Icon="@Icons.Material.Filled.Clear" style="@(Layout.esModoNocturno() ? "color:white" : "color: #a60505")" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </MudPaper>
+                        </div>
+
+                        <div style="flex: 1; text-align:center; margin-left:50px">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task")">Horas Diferencia</span>
+                                @if (horasDiferencia < 0)
+                                {
+                                    <span class="text-task-red">@horasDiferencia h.</span>
+                                }
+                                else
+                                {
+                                    <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black")">@horasDiferencia h.</span>
+                                }
+                             </MudPaper>
+                        </div>
+
+                        <div style="flex: 1; text-align:center;">
+                            <MudPaper Elevation="0" Class="@((Layout.esModoNocturno() ? "center-paper-dark" : "center-paper"))">
+                                <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task")">Cliente</span>
+                                <span class="@(Layout.esModoNocturno() ? "texto-oscuro" : "text-task-black")">@_nombreCliente</span>
+                            </MudPaper>
+                        </div>
+                    </div>
+                </div>
+
+            </MudPaper>
+
+
+        </div>
+
+
+        <div style="display: flex; justify-content: space-between;margin-bottom: 20px; gap: 20px;">
+
+            <MudPaper Class="pa-5" Style="width: 48%; margin-top: 20px; max-height: 300px; overflow-y: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <MudText Style="font-size: 1.5em; margin: 0 auto;"><strong>Equipos</strong></MudText>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        @if (menuRol != null && menuRol.Crear)
+                        {
+                            <div style="margin-left: 10px;">
+                                <MudTooltip Text="Añadir Equipo">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { AñadirEquipoDialog(); })" />
+                                </MudTooltip>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <MudList>
+                    @foreach (var equipos in lstEquipos)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <MudListItem>@equipos.Equipo.Nombre</MudListItem>
+                                <div style="display: flex;">
+                                @if (menuRol != null && menuRol.Eliminar)
+                                {
+                                    @if (Layout.esModoNocturno())
+                                    {
+                                        <div style="margin-left: 10px;">
+                                            <MudTooltip Text="Eliminar">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EliminarEquipo(equipos); })" />
+                                            </MudTooltip>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div style="margin-left: 10px;">
+                                            <MudTooltip Text="Eliminar">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Secondary)" OnClick="@((e) => { EliminarEquipo(equipos); })" />
+                                            </MudTooltip>
+                                        </div>
+                                    }
+
+                                }
+                            </div>
+                        </div>
+                    }
+                </MudList>
+            </MudPaper>
+
+            <MudPaper Class="pa-5" Style="width: 48%; margin-top: 20px; max-height: 300px; overflow-y: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <MudText Style="font-size: 1.5em; margin: 0 auto;"><strong>Programadores</strong></MudText>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        @if (menuRol != null && menuRol.Crear)
+                        {
+
+                                <div style="margin-left: 10px;">
+                                    <MudTooltip Text="Añadir Programador">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { AñadirProgramadorDialog(); })" />
+                                    </MudTooltip>
+                                </div>
+                        }
+                    </div>
+                </div>
+                <MudList>
+                    @foreach (var programadores in lstProgramadores)
+                    {
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <MudListItem>@programadores.Programador?.Nombre</MudListItem>
+                                <div style="display: flex;">
+                                @if (menuRol != null && menuRol.Eliminar)
+                                {
+                                        <div style="margin-left: 10px;">
+                                            <MudTooltip Text="Eliminar">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EliminarProgramador(programadores); })" />
+                                            </MudTooltip>
+                                        </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </MudList>
+            </MudPaper>
+        
+        </div>
+        
+        <div style="display: flex; justify-content: space-between;margin-bottom: 20px; gap: 20px;">
+            <MudPaper Class="pa-5" Style="width: 48%; margin-top: 20px; max-height: 300px; overflow-y: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <MudText Style="font-size: 1.5em; margin: 0 auto;"><strong>Tecnologías</strong></MudText> 
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        @if (menuRol != null && menuRol.Crear)
+                        {
+                            <div style="margin-left: 10px;">
+                                <MudChip Color="Color.Primary" OnClick="@ToggleOpen" Icon="@Icons.Material.Filled.Add" IconColor="Color.Success">Añadir Tecnología</MudChip>
+                                <MudPopover Open="_isOpen" Fixed="true" Class="px-4 pt-4" AnchorOrigin="Origin.CenterLeft" TransformOrigin="Origin.TopLeft">
+                                    <MudPaper Elevation="1" MaxWidth="500px">
+                                        @foreach (var tecnologia in lstTecnologias)
+                                        {
+                                            if (lstProyectoTecnologias.FirstOrDefault(p => p.Tecnologia.Equals(tecnologia)) == null)
+                                            {
+                                                var estilo = $"background-color: rgba({GetR(tecnologia.Color)}, {GetG(tecnologia.Color)}, {GetB(tecnologia.Color)}, 0.5)";
+                                                <MudChip OnClick="@(() => AddTecnologia(tecnologia))" Style="@estilo">@tecnologia.Nombre</MudChip>
+                                            }
+                                        }
+                                    </MudPaper>
+                                    <br />
+                                    <MudButton OnClick="@ToggleOpen" Class="ml-auto mr-n3 mb-1" Color="Color.Error">Cerrar</MudButton>
+                                </MudPopover>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <MudPaper Elevation="0" Style="padding: 15px;" Height="162px">
+                        @if (lstProyectoTecnologias.Count() != 0)
+                        {
+                            @for (int i = 0; i < lstProyectoTecnologias.Count; i++)
+                            {
+                                var tecnologiaAsociada = lstProyectoTecnologias[i];
+                                var estilo = $"background-color: rgba({GetR(tecnologiaAsociada.Tecnologia.Color)}, {GetG(tecnologiaAsociada.Tecnologia.Color)}, {GetB(tecnologiaAsociada.Tecnologia.Color)}, 0.5)";
+                                var isMouseOver = mouseOverState[i];
+                                var icon = isMouseOver ? Icons.Material.Filled.Clear : string.Empty;
+
+                                var currentIndex = i; // Crear una copia local del índice
+
+                                <MudChip Style="@estilo"
+                                         OnClick="@(() => DeleteTecnologia(tecnologiaAsociada))"
+                                         Icon="@icon"
+                                         IconColor="Color.Error"
+                                         @onmouseover="@(() => ToggleIcon(currentIndex, true))"
+                                         @onmouseout="@(() => ToggleIcon(currentIndex, false))">
+                                    @tecnologiaAsociada.Tecnologia.Nombre
+                                </MudChip>
+                            }
+                        }
+                    </MudPaper>
+                </div>
+            </MudPaper>
+        
+
+        
+            <MudPaper Class="pa-5" Style="width: 48%; margin-top: 20px; max-height: 300px; overflow-y: auto;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; width: 100%;">
+                        <MudText Style="font-size: 1.5em; margin: 0 auto;"><strong>Documentos</strong></MudText>
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos">
+
+                            <ButtonTemplate>
+                                <MudFab HtmlTag="label"
+                                        Color="Color.Primary"
+                                        Size="Size.Small"
+                                        StartIcon="@Icons.Material.Filled.CloudUpload"
+                                        for="@context">
+                                    Subir archivos
+                                </MudFab>
+                            </ButtonTemplate>
+                        </MudFileUpload>
+                    </div>
+
+                </div>
+
+
+                <MudDataGrid @ref="docGrid" T="DocumentoProyecto" Items="lstDocProyectos" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="2" CurrentPage="@_selectedPage">
+                    <ToolBarContent>
+                    </ToolBarContent>
+                    <Columns>
+                        <PropertyColumn Property="x => GetWithoutExtension(x)" title="Nombre"></PropertyColumn>
+                        <PropertyColumn Property="x => GetExtension(x)" title="Tipo Documento"></PropertyColumn>
+                        <TemplateColumn>
+                            <CellTemplate>
+                                <MudTooltip Text="Descargar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { DescargarArchivo(context.Item.Id, context.Item.Nombre); })"></MudIconButton>
+                                </MudTooltip>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn>
+                            <CellTemplate>
+                                <MudTooltip Text="Eliminar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => ShowConfirmationDialog(context.Item))"></MudIconButton>
+                                </MudTooltip>
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                    <PagerContent>
+                        <MudPagination SelectedChanged="PageChanged" Count="@(((docGrid?.GetFilteredItemsCount() ?? 0) + (docGrid?.RowsPerPage ?? 0) - 1) / (docGrid?.RowsPerPage ?? 1))"
+                                       Class="pa-4" />
+                    </PagerContent>
+                </MudDataGrid>
+            </MudPaper>
+
+       
+        </div>
+
+        @*
+        <MudPaper Class="pa-3" Style="width: 100%; margin-top: 20px; max-height: 40px; overflow-y: hidden;display: flex; justify-content:center;align-items:center;justify-items:center;  height: 100%;">
+
+                    <MudButton OnClick="OpenDialog" Color="Color.Primary" Size="Size.Small"  Variant="Variant.Filled">
+                        Exportar a Excel
+                    </MudButton>
+        </MudPaper>
+        *@
+
+
+        <MudSwitch T="bool" Class="" Checked="SwitchChecked" CheckedChanged="@(e=>ConversionHoras(e))" Label="Conversion horas" Color="Color.Primary" />
+            <div style="display: flex; justify-content: space-between; gap: 20px;">
+                <MudButton Class="btnExcel" OnClick="OpenDialog" Color="Color.Primary" Style="@(Layout.esModoNocturno() ? "color:white" : "")" Size="Size.Medium" Variant="Variant.Filled">
+                    Exportar a Excel
+                </MudButton>
+                <MudTotalCalendar Values="BuildTotals()" Items="_items">
+                    <CellTemplate>
+                        <div class="@(Layout.esModoNocturno() ? "cell-template-dark" : "cell-template")">
+                            <div style="text-align: center; font-weight: bold;">
+                                @context.Text
+                            </div>
+                            <div style="display: flex; justify-content: space-around; width: 100%;">
+                                <div>@(((HoraItem)context).Hora) h</div>
+                            </div>
+                        </div>
+                    </CellTemplate>
+                    <TotalTemplate>
+                        <div class="mx-2">
+                            <div style="display: inline;">
+                                @(
+                                    context.Definition.FormatFunc == null
+                                    ? context.Amount.ToString(context.Definition.FormatString)
+                                    : context.Definition.FormatFunc(context.Amount)
+                                    )
+                            </div>
+                            <div style="display: inline; font-size: 16px;">@context.Definition.Units</div>
+                        </div>
+                    </TotalTemplate>
+                </MudTotalCalendar>
+            </div>
+    }
+
+}
+else
+{
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    public bool activados = true;
+    public string estados = "";
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    string _searchString = "";
+    string _nombreCliente ="";
+    private MenuRol menuRol = null;
+    public MenuRol menurol { get; set; }
+   
+    private List<HoraItem> _items = new List<HoraItem>();
+    private List<ProgramadoresProyecto> lstProgramadores = new List<ProgramadoresProyecto>();
+    private List<Tecnologia> lstTecnologias = new List<Tecnologia>();
+    private List<ProyectoTecnologia> lstProyectoTecnologias = new();
+    private List<bool> mouseOverState = new List<bool>();
+    public bool _isOpen;
+    private int _selectedPage;
+    List<DocumentoProyecto> lstDocProyectos { get; set; } = new List<DocumentoProyecto>();
+    MudDataGrid<DocumentoProyecto> docGrid;
+    private IBrowserFile file;
+    public ProgramadoresProyecto programadoresProyecto { get; set; }
+    public CPMUser usuario { get; set; }
+    private List<EquiposProyecto> lstEquipos = new List<EquiposProyecto>();
+    public EquiposProyecto equiposProyecto { get; set; }
+    DateRange? rangoFechas;
+    private int horasRealizadas{ 
+        get; 
+        set; 
+    } = 0;
+    public double HorasSemanalesEstimadas = 0;
+
+    [Parameter]
+    public string ProyectoSelect { get; set; }
+    [Parameter] 
+    public Proyecto proyecto { get; set; }
+    [Parameter] 
+    public string id { get; set; }
+
+    List<Cliente> lstCliente = new List<Cliente>();
+    List<Estado> lstEstado = new List<Estado>();
+    List<Equipo> lstEquipo = new List<Equipo>();
+    List<CheckinCheckout> checkinCheckouts = new List<CheckinCheckout>();
+    private int horasTotales = 0;
+    private int horasDiferencia = 0;
+    private int horasSemanales = 0;
+    private bool SwitchChecked = true;
+
+    private bool Cargando = true;
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                usuario = Layout.usuario;
+
+                menuRol = await Crud.GetMenuRol((int)MenuEnum.Informacion, usuario);
+
+                Cargando = false;
+
+                await cargarClientes();
+                await cargarEquipos();
+                await cargarEstados();
+                await CalcularHorasTotales(projectId);
+                HorasDiferencia(horasTotales);
+
+                proyecto = await _ApplicationDbContext.Proyectos.Include(p => p.Cliente).FirstOrDefaultAsync(p => p.Id == projectId);
+
+                _nombreCliente = (proyecto.Cliente != null && proyecto.Cliente.Nombre != null) ? proyecto.Cliente.Nombre : "";
+                await CargarEquiposPorProyecto(proyecto);
+                await CargarProgramadoresPorProyecto(proyecto);
+                await CargarTecnologias();
+                await CargarDocumentos();
+                InitializeMouseOverState();
+                CalcularHorasSemanales();
+
+                _selectedPage = 0;
+                StateHasChanged();
+
+            }
+            else
+            {
+                await CargarEquiposDesdeBD();
+                await CargarProgramadoresDesdeBD();
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception e)
+        {
+            Task.Delay(100);
+            await OnInitializedAsync();
+        }
+
+
+        if (_items.Any())
+        {
+            minDateInicio = _items.Min(item => item.Start.Date);
+            maxDateFin = _items.Max(item => item.Start.Date);
+        }
+        else
+        {
+            minDateInicio = DateTime.Today;
+            maxDateFin = DateTime.Today;
+        }
+
+    }
+
+
+    // Método para obtener el componente rojo (R) de un color hexadecimal
+    int GetR(string colorHex) => Convert.ToInt32(colorHex.Substring(1, 2), 16);
+
+    // Método para obtener el componente verde (G) de un color hexadecimal
+    int GetG(string colorHex) => Convert.ToInt32(colorHex.Substring(3, 2), 16);
+
+    // Método para obtener el componente azul (B) de un color hexadecimal
+    int GetB(string colorHex) => Convert.ToInt32(colorHex.Substring(5, 2), 16);
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+
+        StateHasChanged();
+    }
+
+    private async void ShowConfirmationDialog(DocumentoProyecto documento)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar documento", "¿Está seguro de que desea eliminar este documento?", "Sí", "No");
+        if (result is true)
+        {
+            DeleteFile(documento);
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteFile(DocumentoProyecto documento)
+    {
+        try
+        {
+
+            if (documento.Proyecto != null && documento.Id != 0 && documento.Proyecto.Id != null)
+            {
+                lstDocProyectos.Remove(documento);
+                _ApplicationDbContext.DocumentosProyectos.Remove(documento);
+                _ApplicationDbContext.SaveChangesAsync();
+                Snackbar.Add("Documento eliminado correctamente de la lista y base de datos", Severity.Success);
+            }
+            else
+            {
+                lstDocProyectos.Remove(documento);
+                Snackbar.Add("Documento eliminado correctamente de la lista", Severity.Success);
+            }
+
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add($"Error al eliminar el documento: {e.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(lstDocProyectos, idArchivo, nombreArchivo);
+    }
+
+
+   
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        int indiceBarra = relativeUri.IndexOf('/');
+        string nombreUrl = relativeUri.Substring(0, indiceBarra);
+        return nombreUrl;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private async Task CargarProgramadoresPorProyecto(Proyecto pro)
+    {
+        try
+        {
+            lstProgramadores = await _ApplicationDbContext.ProgramadoresProyectos.Include(it=> it.Programador).Where(programador => programador.Proyecto.Id == pro.Id).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar programadores por proyecto desde la base de datos: {ex.Message}"); 
+        }
+    }
+    private async Task CargarProgramadoresDesdeBD()
+    {
+        try
+        {
+            lstProgramadores = await _ApplicationDbContext.ProgramadoresProyectos.Include(it => it.Programador).Include(it => it.Proyecto).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar programadores desde la base de datos: {ex.Message}");
+        }
+    }
+
+    private async Task CargarEquiposPorProyecto(Proyecto pro)
+    {
+        try
+        {
+            lstEquipos = await _ApplicationDbContext.EquiposProyectos.Include(it => it.Equipo).Include(it => it.Proyecto).Where(equipo => equipo.Proyecto.Id == pro.Id).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar equipos por proyecto desde la base de datos: {ex.Message}");
+        }
+    }
+
+    private async Task CargarEquiposDesdeBD()
+    {
+        try
+        {
+            lstEquipos = await _ApplicationDbContext.EquiposProyectos.Include(it => it.Equipo).Include(it => it.Proyecto).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error al cargar equipos desde la base de datos: {ex.Message}");
+        }
+    }
+
+    private async Task CargarTecnologias()
+    {
+        lstTecnologias = await _ApplicationDbContext.Tecnologias.Where(p => p.EstaActivo).ToListAsync();
+        if (proyecto.Id != 0 && proyecto != null)
+        {
+            lstProyectoTecnologias = await _ApplicationDbContext.ProyectosTecnologias.Where(p => p.Proyecto.Id == proyecto.Id).ToListAsync();
+        }
+
+    }
+  
+
+    public void ToggleOpen()
+    {
+        if (_isOpen)
+            _isOpen = false;
+        else
+            _isOpen = true;
+    }
+
+    private void ToggleIcon(int index, bool value)
+    {
+        if (index < mouseOverState.Count)
+        {
+            mouseOverState[index] = value;
+        }
+        else
+        {
+
+            while (index >= mouseOverState.Count)
+            {
+                mouseOverState.Add(false);
+            }
+            mouseOverState[index] = value;
+        }
+        StateHasChanged();
+    }
+
+
+    private void AddTecnologia(Tecnologia tecnologia)
+    {
+        var nuevaTecnologia = new ProyectoTecnologia { Tecnologia = tecnologia, Proyecto = proyecto };
+        lstProyectoTecnologias.Add(nuevaTecnologia);
+        _ApplicationDbContext.ProyectosTecnologias.Add(nuevaTecnologia);
+        _ApplicationDbContext.SaveChangesAsync();
+        InitializeMouseOverState();
+        StateHasChanged();
+    }
+
+
+    private async Task CargarDocumentos()
+    {
+        if (proyecto.Id != 0)
+        {
+            lstDocProyectos = await _ApplicationDbContext.DocumentosProyectos.Where(p => p.Proyecto.Id == proyecto.Id).ToListAsync();
+        }
+
+    }
+
+    private void InitializeMouseOverState()
+    {
+        mouseOverState.Clear();
+        for (int i = 0; i < lstProyectoTecnologias.Count; i++)
+        {
+            mouseOverState.Add(false);
+        }
+    }
+
+ 
+    private async void DeleteTecnologia(ProyectoTecnologia ProyectoTecnologia)
+    {
+        var proyectoTecnologiaAsociado = lstProyectoTecnologias.FirstOrDefault(p => p.Equals(ProyectoTecnologia));
+
+        if (proyectoTecnologiaAsociado != null && proyectoTecnologiaAsociado.Id != 0)
+        {
+            _ApplicationDbContext.ProyectosTecnologias.Remove(proyectoTecnologiaAsociado);
+            lstProyectoTecnologias.RemoveAll(t => t.Equals(ProyectoTecnologia));
+            await _ApplicationDbContext.SaveChangesAsync();
+          Snackbar.Add("Asociación de tecnología eliminada de la lista y base de datos ", Severity.Success);
+        }
+        else
+        {
+            lstProyectoTecnologias.RemoveAll(t => t.Equals(ProyectoTecnologia));
+           Snackbar.Add("Asociación de tecnología eliminada", Severity.Success);
+        }
+
+
+    }
+
+    private string GetExtension(DocumentoProyecto documento)
+    {
+        return Path.GetExtension(documento.Nombre);
+    }
+
+    private string GetWithoutExtension(DocumentoProyecto documento)
+    {
+        return Path.GetFileNameWithoutExtension(documento.Nombre);
+    }
+
+
+    private async Task SeleccionarArchivos(IReadOnlyList<IBrowserFile> files)
+    {
+        try
+        {
+            foreach (var browserFile in files)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await browserFile.OpenReadStream().CopyToAsync(memoryStream);
+                    var byteArray = memoryStream.ToArray();
+                    var fileContent = Convert.ToBase64String(byteArray);
+
+                    var nuevoDocumento = new DocumentoProyecto
+                        {
+                            Documento = fileContent,
+                            Nombre = browserFile.Name,
+                            Proyecto = proyecto
+                        };
+                    lstDocProyectos.Add(nuevoDocumento);
+                    _ApplicationDbContext.DocumentosProyectos.Add(nuevoDocumento);
+                }
+            }
+            await _ApplicationDbContext.SaveChangesAsync(); // Guardar cambios en la base de datos
+            _ApplicationDbContext.Entry(proyecto).Reload();
+            StateHasChanged();
+            Snackbar.Add("Archivo agregado correctamente", Severity.Success);
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add($"Error al subir archivo: {e.Message}", Severity.Error);
+        }
+    }
+
+    private async void EliminarEquipo(EquiposProyecto equipo)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar equipo", "¿Seguro que quieres eliminar el equipo?", "Si", "No");
+        equipo = _ApplicationDbContext.EquiposProyectos.FirstOrDefault(it => it.Id == equipo.Id);
+
+        if (result is true && equipo != null)
+        {
+
+            _ApplicationDbContext.EquiposProyectos.Remove(equipo);
+            await _ApplicationDbContext.SaveChangesAsync();
+
+        }
+
+        await CargarEquiposPorProyecto(proyecto);
+        StateHasChanged();
+
+    }
+
+    private async void AñadirEquipoDialog()
+    {
+
+        if (equiposProyecto == null)
+        {
+            equiposProyecto = new EquiposProyecto();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+
+                equiposProyecto.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", equiposProyecto.Proyecto);
+                //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+                var dialog = await _dialogService.Show<NewEquipo>("Añadir Equipo", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarEquiposPorProyecto(proyecto);
+                    await CargarProgramadoresPorProyecto(proyecto);
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+    }
+
+    private async void EliminarProgramador(ProgramadoresProyecto programador)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar programador", "¿Seguro que quieres eliminar el programador?", "Si", "No");
+        programador = _ApplicationDbContext.ProgramadoresProyectos.FirstOrDefault(it => it.Id == programador.Id);
+
+        if (result is true && programador != null)
+        {
+
+            _ApplicationDbContext.ProgramadoresProyectos.Remove(programador);
+            await _ApplicationDbContext.SaveChangesAsync();
+
+        }
+
+        await CargarProgramadoresPorProyecto(proyecto);
+        StateHasChanged();
+
+    }
+
+    private async void AñadirProgramadorDialog()
+    {
+
+        if (programadoresProyecto == null)
+        {
+            programadoresProyecto = new ProgramadoresProyecto();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+
+                programadoresProyecto.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", programadoresProyecto.Proyecto);
+                //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+                var dialog = await _dialogService.Show<NewProgramador>("Añadir Programador", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarProgramadoresPorProyecto(proyecto);
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+    }
+    private async Task cargarClientes()
+    {
+        lstCliente = _ApplicationDbContext.Clientes.ToList();
+        StateHasChanged();
+    }
+    private async Task cargarEstados()
+    {
+        lstEstado = _ApplicationDbContext.Estados.ToList();
+        StateHasChanged();
+    }
+    private async Task cargarEquipos()
+    {
+        lstEquipo = _ApplicationDbContext.Equipos.ToList();
+        StateHasChanged();
+    }
+
+    private int CalcularHorasSemanales()
+    {
+        var diferencia = proyecto.FechaPrevistaEntrega - proyecto.FechaPrevistaContrato;
+        var semanasDiferencia = diferencia.Duration().Days / 7;
+        if (semanasDiferencia == 0)
+        {
+            horasSemanales = proyecto.HorasEstimadas;
+        }
+        else
+        {
+            horasSemanales = proyecto.HorasEstimadas / semanasDiferencia;
+        }
+        return lstProgramadores.Count();
+    }
+
+    private async Task CalcularHorasTotales(int projectId)
+    {
+        try
+        {
+            checkinCheckouts = await _ApplicationDbContext.CheckinCheckouts
+                                    .Include(it => it.Usuario).ThenInclude(it => it.Rol)
+                                    .Where(cc => cc.Proyecto.Id == projectId)
+                                    .OrderBy(cc => cc.Usuario.Id)
+                                    .ThenBy(cc => cc.Fecha)
+                                    .ToListAsync();
+        }
+        catch(Exception e)
+        {
+
+        }
+
+        Dictionary<string, Dictionary<DateTime, int>> horasPorUsuarioYDia = new Dictionary<string, Dictionary<DateTime, int>>();
+        _items = new List<HoraItem>();
+        foreach (var checkinCheckout in checkinCheckouts)
+        {
+            if (checkinCheckout.Entrada)
+            {
+                if (!horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id))
+                {
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id] = new Dictionary<DateTime, int>();
+                }
+                horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date] = checkinCheckout.Fecha.Hour;
+            }
+            else if (horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id) &&
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id].ContainsKey(checkinCheckout.Fecha.Date))
+            {
+                int horasTrabajadas = checkinCheckout.Fecha.Hour - horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date];
+                if (horasTrabajadas > 0)
+                {
+                    // Obtener el porcentaje de conversión del rol del usuario
+                    decimal porcentajeConversion = checkinCheckout.Usuario.Rol.PorcentajeConversion;
+
+                    if (!_items.Any(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date))
+                    {
+                        _items.Add(new HoraItem
+                            {
+                                Start = checkinCheckout.Fecha.Date,
+                                Text = checkinCheckout.Usuario.Nombre,
+                                Hora = (int)(horasTrabajadas * porcentajeConversion) // Conversión explícita a int
+                            });
+                    }
+                    else
+                    {
+                        var existingItem = _items.First(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date);
+                        existingItem.Hora += (int)(horasTrabajadas * porcentajeConversion); // Conversión explícita a int
+                    }
+                }
+                horasPorUsuarioYDia[checkinCheckout.Usuario.Id].Remove(checkinCheckout.Fecha.Date);
+            }
+        }
+
+        horasTotales = _items.Sum(item => item.Hora);
+        horasRealizadas = horasTotales;
+        StateHasChanged();
+    }
+
+    private class HoraItem : CalendarItem
+    {
+        public int Hora { get; set; }
+    }
+
+    private List<Value> BuildTotals()
+    {
+        if (Layout.esModoNocturno())
+        {
+            var hora = new ValueDefinition
+                {
+                    Name = "Horas",
+                    Units = "h",
+                    FormatString = "",
+                    Style = "background-color: #005169; color: #ffffff; text-align: center; font-size: 18px"
+                };
+
+            var totals = new List<Value>();
+            totals = _items.ConvertAll(c => new Value { Date = c.Start.Date, Definition = hora, Amount = c.Hora });
+
+            return totals;
+        }
+        else
+        {
+            var hora = new ValueDefinition
+                {
+                    Name = "Horas",
+                    Units = "h",
+                    FormatString = "",
+                    Style = "background-color: #009ee0; color: #ffffff; text-align: center; font-size: 18px"
+                };
+
+            var totals = new List<Value>();
+            totals = _items.ConvertAll(c => new Value { Date = c.Start.Date, Definition = hora, Amount = c.Hora });
+
+            return totals;
+        }
+       
+    }
+
+
+    private bool ConversionHoras(bool isChecked)
+    {
+        Dictionary<string, Dictionary<DateTime, int>> horasPorUsuarioYDia = new Dictionary<string, Dictionary<DateTime, int>>();
+        _items.Clear();
+
+        if (!isChecked)
+        {
+
+            foreach (var checkinCheckout in checkinCheckouts)
+            {
+                if (checkinCheckout.Entrada)
+                {
+                    if (!horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id))
+                    {
+                        horasPorUsuarioYDia[checkinCheckout.Usuario.Id] = new Dictionary<DateTime, int>();
+                    }
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date] = checkinCheckout.Fecha.Hour;
+                }
+                else if (horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id) && horasPorUsuarioYDia[checkinCheckout.Usuario.Id].ContainsKey(checkinCheckout.Fecha.Date))
+                {
+                    int horasTrabajadas = checkinCheckout.Fecha.Hour - horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date];
+                    if (horasTrabajadas > 0)
+                    {
+                        if (!_items.Any(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date))
+                        {
+                            _items.Add(new HoraItem
+                            {
+                                Start = checkinCheckout.Fecha.Date,
+                                Text = checkinCheckout.Usuario.Nombre,
+                                Hora = horasTrabajadas
+                            });
+                        }
+                        else
+                        {
+                            var existingItem = _items.First(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date);
+                            existingItem.Hora += horasTrabajadas;
+                        }
+                    }
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id].Remove(checkinCheckout.Fecha.Date);
+                }
+            }
+
+            SwitchChecked = false;
+            horasTotales = _items.Sum(item => item.Hora);
+            horasRealizadas = horasTotales;
+            HorasDiferencia(horasTotales);
+            return false;
+        }
+        else
+        {
+
+            foreach (var checkinCheckout in checkinCheckouts)
+            {
+                if (checkinCheckout.Entrada)
+                {
+                    if (!horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id))
+                    {
+                        horasPorUsuarioYDia[checkinCheckout.Usuario.Id] = new Dictionary<DateTime, int>();
+                    }
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date] = checkinCheckout.Fecha.Hour;
+                }
+                else if (horasPorUsuarioYDia.ContainsKey(checkinCheckout.Usuario.Id) &&
+                        horasPorUsuarioYDia[checkinCheckout.Usuario.Id].ContainsKey(checkinCheckout.Fecha.Date))
+                {
+                    int horasTrabajadas = checkinCheckout.Fecha.Hour - horasPorUsuarioYDia[checkinCheckout.Usuario.Id][checkinCheckout.Fecha.Date];
+                    if (horasTrabajadas > 0)
+                    {
+                        decimal porcentajeConversion = checkinCheckout.Usuario.Rol.PorcentajeConversion;
+
+                        if (!_items.Any(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date))
+                        {
+                            _items.Add(new HoraItem
+                                {
+                                    Start = checkinCheckout.Fecha.Date,
+                                    Text = checkinCheckout.Usuario.Nombre,
+                                    Hora = (int)(horasTrabajadas * porcentajeConversion) // Conversión explícita a int
+                                });
+                        }
+                        else
+                        {
+                            var existingItem = _items.First(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == checkinCheckout.Fecha.Date);
+                            existingItem.Hora += (int)(horasTrabajadas * porcentajeConversion); // Conversión explícita a int
+                        }
+                    }
+                    horasPorUsuarioYDia[checkinCheckout.Usuario.Id].Remove(checkinCheckout.Fecha.Date);
+                }
+            }
+            horasTotales = _items.Sum(item => item.Hora);
+            horasRealizadas = horasTotales;
+            HorasDiferencia(horasTotales);
+            SwitchChecked = true;
+            return true;
+        }
+    }
+
+    private void HorasDiferencia(int horasTotales)
+    {
+        horasDiferencia = proyecto.HorasEstimadas - horasTotales;
+    }
+
+    //Metodo para calcular las horas realizadas entre un rango de fechas
+    private void DiferenciaHorasCalendario()
+    {
+        var horas = 0;
+        foreach (var item in _items)
+        {
+            if (rangoFechas != null && item.Start >= rangoFechas.Start && item.Start <= rangoFechas.End)
+            {
+                horas += item.Hora;
+            }
+        }
+
+        horasRealizadas = horas;
+
+        if(horasRealizadas == 0)
+        {
+            ClearHorasTotales();
+        }
+    }
+
+    //Restablece las horas realizadas a horas totales
+    private void ClearHorasTotales()
+    {
+        horasRealizadas = horasTotales;
+    }
+
+    public async Task ExportarDatosCalendarioExcel()
+    {
+        // Asegurar que hay datos para exportar
+        if (_items == null || _items.Count == 0)
+        {
+            Console.WriteLine("No hay datos en el calendario para mostrar.");
+            return;
+        }
+
+
+        DateTime fechaMinima = rangoFechas?.Start ?? DateTime.MinValue;
+        DateTime fechaMaxima = rangoFechas?.End ?? DateTime.MaxValue;
+
+        var itemsFiltrados = _items
+            .Where(item => item.Start.Date >= fechaMinima && item.Start.Date <= fechaMaxima)
+            .OrderBy(item => item.Start.Date)
+            .ToList();
+
+
+        SpreadsheetInfo.SetLicense("E7OT-N392-PMUC-Q7ZS");
+        ExcelFile workbook = new ExcelFile();
+        ExcelWorksheet worksheet = workbook.Worksheets.Add("Datos Calendario");
+        ListtoDataTableConverter converter = new ListtoDataTableConverter();
+        List<clsExportCalendario> listaExportar = new List<clsExportCalendario>();
+
+        foreach (var item in itemsFiltrados)
+        {
+            clsExportCalendario exportCalendario = new clsExportCalendario
+                {
+                    Fecha = item.Start.Date,
+                    Usuario = item.Text,
+                    Hora = item.Hora
+                };
+
+            listaExportar.Add(exportCalendario);
+        }
+
+        DataTable dt = converter.ToDataTable(listaExportar);
+
+        InsertDataTableOptions options = new InsertDataTableOptions() { ColumnHeaders = true };
+        worksheet.InsertDataTable(dt, options);
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            workbook.Save(memoryStream, GemBox.Spreadsheet.XlsxSaveOptions.XlsDefault);
+            memoryStream.Position = 0;
+
+            await _jSRuntime.InvokeVoidAsync("downloadFile", "Datos_Calendario.xlsx", Convert.ToBase64String(memoryStream.ToArray()));
+        }
+    }
+
+
+
+
+    private class clsExportCalendario
+    {
+        public DateTime Fecha { get; set; }
+        public string Usuario { get; set; }
+        public int Hora { get; set; }
+    }
+
+
+    private DateTime? fechaInicio;
+    private DateTime? fechaFin;
+    private DateTime minDateInicio;
+    private DateTime maxDateFin;
+
+
+    private async void OpenDialog()
+{
+    var parameters = new DialogParameters
+    {
+        ["ShowResetButton"] = false // Cambiar a true o false según la lógica de la aplicación
+    };
+
+    DateRange? initialDateRange = rangoFechas; // Guarda el rango de fechas inicial
+
+    var options = new DialogOptions { CloseOnEscapeKey = true, CloseButton = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+    var result = await _dialogService.Show<DateRangePickerDialog>("", parameters, options).Result;
+
+    if (!result.Cancelled && result.Data is DateRange dates)
+    {
+       
+        
+        
+            // Se seleccionó un rango de fechas
+            rangoFechas = dates;
+            DiferenciaHorasCalendario();
+           await ExportarDatosCalendarioExcel();
+        
+
+        StateHasChanged(); // Actualizar el estado de la interfaz de usuario
+    }
+    else if (result.Cancelled)
+    {
+        // Se presionó "Resetear", simplemente cerrar el diálogo sin hacer cambios
+        return;
+    }
+    else if (!result.Cancelled && result.Data == null)
+    {
+
+
+                rangoFechas = new DateRange(minDateInicio, maxDateFin);
+                DiferenciaHorasCalendario();
+                await ExportarDatosCalendarioExcel();
+            
+    }
+}
+
+
+
+    
+
+
+}

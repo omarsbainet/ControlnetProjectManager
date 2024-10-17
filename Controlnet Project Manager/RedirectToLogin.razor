@@ -1,0 +1,28 @@
+@inject NavigationManager NavManager;
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var authenticationState = await AuthenticationStateTask;
+        try
+        {
+            if (authenticationState?.User?.Identity is null || !authenticationState.User.Identity.IsAuthenticated)
+            {
+                var returnUrl = NavManager.ToBaseRelativePath(NavManager.Uri);
+
+                if (string.IsNullOrWhiteSpace(returnUrl))
+                    NavManager.NavigateTo("/login", true);
+                else
+                    NavManager.NavigateTo($"/login?returnUrl=~/{returnUrl}", true);
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
+       
+    }    
+}

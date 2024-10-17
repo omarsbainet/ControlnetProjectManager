@@ -1,0 +1,475 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Controlnet_Project_Manager.Pages.Desarrollo
+@using Controlnet_Project_Manager.Pages.Incidencia
+@using System.Reflection;
+@using System.ComponentModel;
+@using static Controlnet_Project_Manager.Pages.Index
+@using Blazored.TextEditor;
+@using Controlnet_Project_Manager.Shared.Model
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject CRUD Crud;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject ISnackbar Snackbar;
+@inject FileService fileService;
+@inject NavigationManager _navigate;
+
+<MudDialog>
+    <DialogContent>
+
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTabs Elevation="2" Rounded="true" Class="d-flex ml-4" >
+                        <MudTabPanel OnClick="CambioPanel" Text="Información">
+                            <br />
+                            <br />
+                            <MudGrid>
+                                <MudItem xs="6">
+                                    <MudTextField xs="6" @bind-Value="peticion.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    @if (peticion.Autor == null)
+                                    {
+                                        <MudTextField xs="6" T="string" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true">No tiene autor</MudTextField>
+                                    }
+                                    else
+                                    {
+                                        <MudTextField @bind-Value="peticion.Autor.Nombre" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" ReadOnly="true" Disabled="true" />
+                                    }
+                                </MudItem>
+                            </MudGrid>
+                            <MudGrid>
+                                <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8" Style="pointer-events: none;">
+                                    <MudDatePicker Date="@peticion.FechaCreacion" DateChanged="e => peticion.FechaCreacion = e.Value.Date" Label="Fecha de Creación" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                                </MudItem>
+                                <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8">
+                                    <MudDatePicker Date="@peticion.FechaEntrega" DateChanged="e => peticion.FechaEntrega = e.Value.Date" Label="Fecha de Entrega" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                            </MudGrid>
+                            <BlazoredTextEditor @ref="@QuillHtml" EditorCssStyle="height: 250px" Placeholder="No hay descripcion">
+                                <ToolbarContent>
+                                    <select class="ql-header">
+                                        <option selected=""></option>
+                                        <option value="1"></option>
+                                        <option value="2"></option>
+                                        <option value="3"></option>
+                                        <option value="4"></option>
+                                        <option value="5"></option>
+                                    </select>
+                                    <span class="ql-formats">
+                                        <button class="ql-bold"></button>
+                                        <button class="ql-italic"></button>
+                                        <button class="ql-underline"></button>
+                                        <button class="ql-strike"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <select class="ql-color"></select>
+                                        <select class="ql-background"></select>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-list" value="ordered"></button>
+                                        <button class="ql-list" value="bullet"></button>
+                                    </span>
+                                </ToolbarContent>
+                                <EditorContent>
+                                    @((MarkupString)peticion.Informacion)
+                                </EditorContent>
+                            </BlazoredTextEditor>
+                        
+                        
+                        </MudTabPanel>
+                        <MudTabPanel OnClick="CambioPanel" Text="Documentos">
+                            <br />
+                            <br />
+                            <MudForm Model="@doc" @ref="@formDoc" ValidationDelay="0">
+                                @if (lstDocPeticion != null && lstDocPeticion.Count != 0)
+                                {
+                                    
+                                    <MudDataGrid @ref="@_grid" Elevation="6" T="DocumentoPeticion" Items="@FiltrarDocumentos()" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="5" CurrentPage="@_selectedPage">
+                                        <ToolBarContent>
+                                            <MudText Typo="Typo.h6">Documentos</MudText>
+                                            <MudSpacer />
+                                            <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos" AppendMultipleFiles>
+                                            <ButtonTemplate>
+                                                <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                                <MudIconButton OnClick="@DescargarTodo" Variant="Variant.Filled" Color="Color.Primary" Icon="@IconoDescarga" />
+                                            </ButtonTemplate>
+                                        </MudFileUpload>
+                                        <MudSpacer />
+                                        <MudSelect T="string" Label="Tipo documentación" AnchorOrigin="Origin.BottomCenter" @bind-Value="@tipoDoc" Variant="Variant.Outlined" Margin="Margin.Dense" @onchange="@HandleTipoDocChange" Clearable>
+                                            @foreach (string s in listaExtensiones)
+                                                {
+                                                    <MudSelectItem Value="@s">@s</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                        </ToolBarContent>
+                                        <Columns>
+                                            <PropertyColumn Property="x => GetWithoutExtension(x)" title="Nombre"></PropertyColumn>
+                                            <PropertyColumn Property="x => GetExtension(x)" title="Tipo Documento"></PropertyColumn>
+                                            <TemplateColumn>
+                                                <CellTemplate>
+                                                    <MudTooltip Text="Descargar">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { DescargarArchivo(context.Item.Id, context.Item.Nombre); })"></MudIconButton>
+                                                    </MudTooltip>
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                            <TemplateColumn>
+                                                <CellTemplate>
+                                                    <MudTooltip Text="Eliminar">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { ShowConfirmationDialog(context.Item); })"></MudIconButton>
+                                                    </MudTooltip>
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                        </Columns>
+                                        <PagerContent>
+                                            <MudPagination SelectedChanged="PageChanged" Count="@((_grid?.GetFilteredItemsCount() ?? 0 + _grid?.RowsPerPage ?? 0 - 1) / _grid?.RowsPerPage ?? 1)" Class="pa-4" />
+                                        </PagerContent>
+                                    </MudDataGrid>
+                                    
+                                }
+                                else
+                                {
+                                    <MudText>No hay documentos en esta peticion. ¿Desea agregar alguno?</MudText>
+                                    <MudSpacer />
+                                    <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos" AppendMultipleFiles>
+                                    <ButtonTemplate>
+                                        <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                    </ButtonTemplate>
+                                </MudFileUpload>
+                                }
+                            </MudForm>
+                        </MudTabPanel>
+                    </MudTabs>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => Submit())">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Parameter] public CPMUser autor { get; set; }
+    [Parameter] public Peticion peticionpadre { get; set; }
+    [Parameter] public Peticion peticion { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    private IBrowserFile file { get; set; }
+    private string IconoDescarga = Icons.Material.Filled.Download;
+    private MudForm formDoc;
+    private DocumentoPeticion doc = new();
+    private List<DocumentoPeticion> lstDocPeticion { get; set; } = new();
+    private MudDataGrid<DocumentoPeticion>? _grid;
+    private int _selectedPage;
+    private string tipoDoc;
+    private List<string> listaExtensiones = new();
+    private List<DocumentoPeticion> filteredDocs;
+    private List<CPMUser> lstUsers = new List<CPMUser>();
+    private bool panelInformacion = true;
+    private BlazoredTextEditor QuillHtml;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+     
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (peticion == null)
+                {
+                    peticion = new Peticion();
+                    peticion.FechaCreacion = DateTime.Today;
+                    peticion.FechaEntrega = DateTime.Today;
+                    peticion.Autor = _ApplicationDbContext.Users.First(c => c.Id == autor.Id);
+                }
+
+                if (peticion.Id != 0 && peticion.Id != null)
+                {
+                    peticion = _ApplicationDbContext.Peticiones.FirstOrDefault(u => u.Id == peticion.Id);
+                    await cargarDocs(peticion.Id);
+                }
+
+                //await cargarEstados();
+                await cargaUsuario();
+                GetListaExtension(lstDocPeticion);
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    void HandleTipoDocChange(ChangeEventArgs e)
+    {
+        string selectedTipoDoc = e.Value?.ToString().ToLower();
+
+        if (!string.IsNullOrEmpty(selectedTipoDoc))
+        {
+            filteredDocs = lstDocPeticion.Where(doc => GetExtension(doc).ToLower() == selectedTipoDoc).ToList();
+            StateHasChanged();
+        }
+    }
+
+
+    private async void ShowConfirmationDialog(DocumentoPeticion document)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar documento", "¿Seguro que quieres eliminar documento?", "Si", "No");
+
+        if (result is true)
+        {
+            DeleteFile(document);
+            StateHasChanged();
+        }
+    }
+
+    private void DeleteFile(DocumentoPeticion documento)
+    {
+        try
+        {
+            lstDocPeticion.Remove(documento);
+            _ApplicationDbContext.DocumentosPeticiones.Remove(documento);
+            Snackbar.Add("Elimninado correctamente", Severity.Success);
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add("Error al eliminar el archivo", Severity.Error);
+        }
+    }
+
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(lstDocPeticion, idArchivo, nombreArchivo);
+    }
+
+    private string GetExtension(DocumentoPeticion documento)
+    {
+        return Path.GetExtension(documento.Nombre);
+    }
+
+    private string GetWithoutExtension(DocumentoPeticion documento)
+    {
+        return Path.GetFileNameWithoutExtension(documento.Nombre);
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    private List<DocumentoPeticion> FiltrarDocumentos()
+    {
+        return lstDocPeticion.Where(it => tipoDoc == null || GetExtension(it).ToLower() == tipoDoc.ToLower()).ToList();
+    }
+
+    private async Task SeleccionarArchivos(IReadOnlyList<IBrowserFile> files)
+    {   
+        try
+        {
+            foreach (IBrowserFile browserFile in files)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await browserFile.OpenReadStream().CopyToAsync(memoryStream);
+                    var byteArray = memoryStream.ToArray();
+                    var fileContent = Convert.ToBase64String(byteArray);
+
+                    // Asignar contenido del archivo a la propiedad Documento de doc
+                    var nuevoDocumento = new DocumentoPeticion
+                        {
+                            Documento = fileContent,
+                            Nombre = browserFile.Name,
+                            Peticion = peticion
+                        };
+                    lstDocPeticion.Add(nuevoDocumento);
+                    file = browserFile;
+                }
+            }
+            _ApplicationDbContext.Entry(peticion).Reload();
+            StateHasChanged();
+            Snackbar.Add("Agregado correctamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+
+    }
+
+    private async Task DescargarTodo()
+    {
+        if (lstDocPeticion != null && lstDocPeticion.Count != 0)
+        {
+            foreach (DocumentoPeticion d in lstDocPeticion)
+            {
+                await fileService.DescargarArchivo(lstDocPeticion, d.Id, d.Nombre);
+            }
+        }
+        else
+        {
+            Snackbar.Add("No hay archivos disponibles.", Severity.Warning);
+        }
+    }
+
+    async Task cargarDocs(int idPeticion)
+    {
+        lstDocPeticion = _ApplicationDbContext.DocumentosPeticiones
+            .Where(doc => doc.Peticion.Id == idPeticion)
+            .ToList();
+    }
+
+    private async Task cargaUsuario()
+    {
+        // Cargar los usuarios asociados a los IDs obtenidos
+        lstUsers = _ApplicationDbContext.Users
+        .Where(usuario => _ApplicationDbContext.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+            .ToList();
+    }
+
+    private void GetListaExtension(List<DocumentoPeticion> listaDocs)
+    {
+        foreach (DocumentoPeticion d in listaDocs)
+        {
+            if (!listaExtensiones.Contains(GetExtension(d).ToLower()))
+            {
+                listaExtensiones.Add(GetExtension(d).ToLower());
+            }
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        //_ApplicationDbContext.Entry(peticion).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (peticion.Id != 0 && peticion.Id != null)
+                {
+                    proyecto = _ApplicationDbContext.Proyectos.SingleOrDefault(it => it.Id == peticion.Proyecto.Id);
+
+                    peticion.Proyecto = proyecto;
+
+                                       
+                    if (panelInformacion)
+                    {
+                        peticion.Informacion = await QuillHtml.GetHTML();
+                    }
+
+                    _ApplicationDbContext.Peticiones.Update(peticion);
+                    _ApplicationDbContext.SaveChanges();
+                }
+                else
+                {
+                    if (!string.IsNullOrEmpty(peticion.Nombre))
+                    {
+                        peticion.Proyecto = proyecto;
+                        peticion.FechaCreacion = DateTime.Today;
+                        if (peticionpadre != null)
+                        {
+                            peticion.Padre = peticionpadre;
+                            if (peticionpadre.Hijos == null)
+                            {
+                                peticionpadre.Hijos = new List<Peticion>();
+                            }
+                            peticionpadre.Hijos.Add(peticion);
+                            _ApplicationDbContext.Peticiones.Update(peticionpadre);
+                        }
+                        peticion.Autor = _ApplicationDbContext.Users.First(c => c.Id == autor.Id);
+
+                        if (panelInformacion)
+                        {
+                            peticion.Informacion = await QuillHtml.GetHTML();
+                        }
+
+                        _ApplicationDbContext.Peticiones.Add(peticion);
+                        _ApplicationDbContext.SaveChanges();
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", "Es obligatorio rellenar el nombre de la peticion");
+                        return;
+                    }
+                }
+
+                if (file != null)
+                {
+                    await UploadFile();
+                }
+
+                MudDialog.Close(DialogResult.Ok<Peticion>(peticion));
+                Snackbar.Add("Petición publicada correctamente", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    private async Task UploadFile()
+    {
+        try
+        {
+            foreach (DocumentoPeticion d in lstDocPeticion)
+            {
+                if (d.Id != 0 && d.Id != null)
+                {
+                    _ApplicationDbContext.DocumentosPeticiones.Update(d);
+                }
+                else
+                {
+                    _ApplicationDbContext.DocumentosPeticiones.Add(d);
+                }
+            }
+
+            await _ApplicationDbContext.SaveChangesAsync();
+            Snackbar.Add("Subido correctamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async void CambioPanel()
+    {
+        panelInformacion = !panelInformacion;
+        if (!panelInformacion)
+        {
+            peticion.Informacion = await QuillHtml.GetHTML();
+        }
+    }
+}

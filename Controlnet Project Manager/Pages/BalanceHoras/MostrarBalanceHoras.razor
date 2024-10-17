@@ -1,0 +1,713 @@
+﻿@page "/BalanceHoras"
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using GemBox.Spreadsheet
+@using Microsoft.EntityFrameworkCore
+@using System.ComponentModel
+@using System.Reflection
+@using System.Data
+@using System.Globalization
+@using static Controlnet_Project_Manager.Pages.Index
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject IJSRuntime _jSRuntime;
+@inject CRUD Crud
+@inject NavigationManager _navigationManager;
+
+@inject MyCustomTheme tema;
+<style>
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+    .btnExcel {
+        position: absolute;
+        margin-left: 20px;
+        margin-top: 15px;
+        margin-bottom: 10px;
+    }
+</style>
+@if (!Cargando)
+{
+    @if (menuRol != null)
+    {
+<MudToolBar DisableGutters="true" Style="@(Layout.esModoNocturno() ? $"height: 26px; background-color: {tema.Theme.PaletteDark.Primary}; display: flex; align-items: center; justify-content: center;" : $"height: 26px; background-color: {tema.Theme.Palette.Primary}; display: flex; align-items: center; justify-content: center;")">
+        <MudText Typo="Typo.h5" Style="color: white;">Balance anual</MudText>
+    </MudToolBar>
+    <MudToolBar Style="@(Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 1500;  background-color: {tema.Theme.PaletteDark.Primary}; justify-content: center;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 1500;  background-color: {tema.Theme.Palette.Primary}; justify-content: center;")">
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center; margin-left: 5px">
+            <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            @(TextSelection("Estado", _selectedEstados))
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var estado in _estados.Select(it => it.Nombre))
+                    {
+                        var isChecked = _selectedEstados.Contains(estado);
+                        <MudMenuItem Style="width: 250px; height: 50px;">
+                            <div>
+                                <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado" @onclick="@(() => ToggleSelection(estado,_selectedEstados))" />
+                            </div>
+                        </MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+        <div style="width: 15%; flex-direction: row; display: flex; align-items: center;">
+            <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                <ActivatorContent>
+                    <MudChip Size="Size.Large" Color="Color.Secondary" Style="@(Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                            Año: @_year
+                        </div>
+                        <div style="position: absolute; right: 5px; bottom: 8px;">
+                            <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                        </div>
+                    </MudChip>
+                </ActivatorContent>
+                <ChildContent>
+                    @foreach (var año in años.Select(it => it))
+                    {
+                        <MudMenuItem Style="width: 250px; height: 50px;" @onclick="@(() => CargarInfoProyectosPorMes(año))">@año</MudMenuItem>
+                    }
+                </ChildContent>
+            </MudMenu>
+        </div>
+    </MudToolBar>
+    <MudDataGrid Items="@infoProyectos" T="InfoProyectos" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="false" Hideable="true" RowsPerPage="12" Class="mt-10">
+        <ToolBarContent>
+            <MudButton Class="btnExcel" OnClick="ExportarDatosExcel" Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled">
+                Exportar a Excel
+            </MudButton>
+        </ToolBarContent>
+        <Columns>
+            <HierarchyColumn T="InfoProyectos" ButtonDisabledFunc="@(x => x.SubProyectos == null || x.SubProyectos.Count() == 0)" />
+            <PropertyColumn T="InfoProyectos" TProperty="string" Property="x => x.Mes" Title="Mes" />
+            <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana1" Title="Semana 1" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana2" Title="Semana 2" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana3" Title="Semana 3" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana4" Title="Semana 4" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana1real" Title="Semana 1 real" />
+                    <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana2real" Title="Semana 2 real" />
+                        <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana3real" Title="Semana 3 real" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.Semana4real" Title="Semana 4 real" />
+            <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.HorasTotalDesarrolladas" Title="Total horas desarrollo/mes" />
+                <PropertyColumn T="InfoProyectos" TProperty="int" Property="x=>x.HorasDesarolloReal" Title="Total horas estimadas/real" CellStyleFunc="x=>ColorHorasEstimadasReal(x.HorasDesarolloReal)"/>
+            <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.TotalHorasPosiblesDesarrolladores" Title="Total horas desarrolladores/mes" />
+            <PropertyColumn T="InfoProyectos" TProperty="int" Property="x => x.DiferenciaHorasDesarrolladas" Title="Diferencia horas trabajo/mes" CellStyleFunc="x => ColorDesarrolladores(x.DiferenciaHorasDesarrolladas)"/>
+            <PropertyColumn T="InfoProyectos" TProperty="double" Property="x => x.DesarrolladoresSobrantes" Title="Desarrolladores sobrantes" CellStyleFunc="x => ColorDesarrolladores(x.DesarrolladoresSobrantes)"/>
+        </Columns>
+        <ChildRowContent>
+            <CascadingValue Value="this">
+                    <SubBalanceHoras infoProyectos="@context.Item"></SubBalanceHoras>
+                </CascadingValue>
+            </ChildRowContent>
+        </MudDataGrid>
+    }
+    else
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    private bool Cargando = true;
+    private List<Proyecto> proyectos = new List<Proyecto>();
+    private List<CPMUser> desarrolladores = new List<CPMUser>();
+    private List<Rol> rolesPlantilla = new List<Rol>();
+    private int _year = 0;
+    private List<InfoProyectos> infoProyectos = new List<InfoProyectos>();
+    private List<InfoProyectos> subProyectosActuales = new List<InfoProyectos>();
+    private List<String> _selectedEstados = new List<String>();
+    private List<Estado> _estados = new List<Estado>();
+    private List<string> meses = new List<string>();
+    private List<int> años = new List<int>();
+    private int horasDesarrollo = 0;
+    private int horasDesarrolloReal = 0;
+    private int horasDiferencia = 0;
+    private string colorStyle = "";
+    private bool render = true;
+    private int horasDesarrolladores = 0;
+    private int horasSemanales = 0;
+    private int horasTotalSemanas = 0;
+    private double desarrolladoresSobrantes = 0.0;
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    public CPMUser usuario { get; set; }
+    private List<HoraItem> _items = new List<HoraItem>();
+    List<CheckinCheckout> checkinCheckouts = new List<CheckinCheckout>();
+    private int horasTotales = 0;
+    private int horasRealizadas
+    {
+        get;
+        set;
+    } = 0;
+    [Parameter]
+    public string id { get; set; }
+
+    [Parameter]
+    public Proyecto proyecto { get; set; }
+    public class InfoProyectos
+    {
+        public string Mes { get; set; }
+        public int Semana1 { get; set; }
+        public int Semana2 { get; set; }
+        public int Semana3 { get; set; }
+        public int Semana4 { get; set; }
+        public int Semana1real  { get; set; }
+        public int Semana2real  { get; set; }
+        public int Semana3real  { get; set; }
+        public int Semana4real { get; set; }
+        public int HorasTotalDesarrolladas { get; set; }
+        public int HorasDesarolloReal{ get; set; }
+        public int TotalHorasPosiblesDesarrolladores { get; set; }
+        public int DiferenciaHorasDesarrolladas { get; set; }
+        public double DesarrolladoresSobrantes { get; set; }
+        public List<InfoProyectos> SubProyectosInfo { get; set; }
+        public List<Proyecto> SubProyectos { get; set; }
+
+        public InfoProyectos(string mes, int semana1, int semana2, int semana3, int semana4,int semana1real, int semana2real, int semana3real, int semana4real, int horasTotalDesarrolladas,int horasDesarolloReal, int totalHorasPosiblesDesarrolladores, int diferenciaHorasDesarrolladores, double desarrolladoresSobrantes, List<InfoProyectos> subProyectosInfo, List<Proyecto> subProyectos)
+        {
+            this.Mes = mes;
+            this.Semana1 = semana1;
+            this.Semana2 = semana2;
+            this.Semana3 = semana3;
+            this.Semana4 = semana4;
+            this.Semana1real=semana1real;
+            this.Semana2real = semana2real;
+            this.Semana3real = semana3real;
+            this.Semana4real = semana4real;
+            this.HorasTotalDesarrolladas = horasTotalDesarrolladas;
+            this.HorasDesarolloReal = horasDesarolloReal;
+            this.TotalHorasPosiblesDesarrolladores = totalHorasPosiblesDesarrolladores;
+            this.DiferenciaHorasDesarrolladas = diferenciaHorasDesarrolladores;
+            this.DesarrolladoresSobrantes = desarrolladoresSobrantes;
+            this.SubProyectosInfo = subProyectosInfo;
+            this.SubProyectos = subProyectos;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await obtenerUsuario();
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+            CargarListaMeses();
+            CargarAños();
+            await CargarEstadosProyecto();
+            await CargarRolesPlantilla();
+            await CargarDesarrolladoresPlantilla();
+            await CargarInfoProyectosPorMes(_year);
+
+            if (infoProyectos.Count() > 0)
+            {
+                Cargando = false;
+            }
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    // Método para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+
+    private void CargarAños()
+    {
+        _year = DateTime.Now.Year;
+        for (int i = 1; i <=4 ; i++)
+        {
+            años.Add(_year + i);
+            años.Add(_year - i);
+        }
+        años.Add(_year);
+        años = años.Order().ToList();
+    }
+
+    public async Task LoadInfo(int year)
+    {
+        _year = year;
+        infoProyectos = new();
+        await CargarProyectosPorMesYAnoBBDD(); //llamada a la bd
+        var proyectosSeleccionados = proyectos.Where(proyecto => _selectedEstados.Contains(proyecto.Estado.Nombre)).ToList();
+
+    }
+
+    public async Task CargarInfoProyectosPorMes(int año)
+    {
+        _year = año;
+        infoProyectos = new List<InfoProyectos>();
+
+        for (int i = 1; i <= 12; i++)
+        {
+            await CargarProyectosPorMesYAnoBBDD(i); //llamada a la bd
+            var proyectosSeleccionados = proyectos.Where(proyecto => _selectedEstados.Contains(proyecto.Estado.Nombre)).ToList();
+
+            foreach (var proyecto in proyectosSeleccionados)
+            {
+                CargarInfoProyecto(proyecto, i);
+            }
+
+            // Crear infoProyecto del mes completo
+            string mes = meses[i - 1];
+            int horasSemana1 = 0, horasSemana2 = 0, horasSemana3 = 0, horasSemana4 = 0;
+            int horasSemana1real = 0, horasSemana2real = 0, horasSemana3real = 0, horasSemana4real = 0;
+            int horasDesarrolloMes = 0;
+
+            foreach (var infoProyecto in subProyectosActuales)
+            {
+                horasSemana1 += infoProyecto.Semana1;
+                horasSemana2 += infoProyecto.Semana2;
+                horasSemana3 += infoProyecto.Semana3;
+                horasSemana4 += infoProyecto.Semana4;
+                horasSemana1real += infoProyecto.Semana1real;
+                horasSemana2real += infoProyecto.Semana2real;
+                horasSemana3real += infoProyecto.Semana3real;
+                horasSemana4real += infoProyecto.Semana4real;
+                horasDesarrolloMes += infoProyecto.HorasTotalDesarrolladas;
+            }
+
+            int horasDesarrolladoresMes = 160 * desarrolladores.Count();
+            int horasDiferenciaMes = horasDesarrolladoresMes - horasDesarrolloMes;
+            int horasDesarrolloReal = horasDesarrolloMes - (horasSemana1real + horasSemana2real + horasSemana3real + horasSemana4real);
+            double desarrolladoresSobrantesMes = (double)horasDiferenciaMes / 160;
+
+            if (horasDesarrolloMes == 0 && desarrolladoresSobrantesMes == 0.0)
+            {
+                horasDiferenciaMes = horasDesarrolladoresMes;
+                desarrolladoresSobrantesMes = (double)horasDiferenciaMes / 160;
+            }
+
+            var infoProyectoMes = new InfoProyectos(
+                mes, horasSemana1, horasSemana2, horasSemana3, horasSemana4,
+                horasSemana1real, horasSemana2real, horasSemana3real, horasSemana4real,
+                horasDesarrolloMes, horasDesarrolloReal, horasDesarrolladoresMes,
+                horasDiferenciaMes, desarrolladoresSobrantesMes,
+                subProyectosActuales, proyectosSeleccionados
+            );
+
+            infoProyectos.Add(infoProyectoMes);
+            subProyectosActuales = new List<InfoProyectos>();
+        }
+    }
+
+
+    private string ColorDesarrolladores(double desarrolladoresSobrantes)
+    {
+        if (desarrolladoresSobrantes > 0)
+        {
+            return "color: #008000";
+        }
+        else
+        {
+            return "color: #FF0000";
+        }
+    }
+    private string ColorHorasEstimadasReal(int desarrolladoresSobrantes)
+    {
+        if (desarrolladoresSobrantes > 0)
+        {
+            return "color: #FF0000";
+        }
+        else
+        {
+            return "color: #008000";
+        }
+    }
+
+    public void CargarInfoProyecto(Proyecto proyecto, int mes)
+    {
+        var mesActual = meses[mes - 1];
+
+        // Calcular valores necesarios antes del bucle
+        CalcularHorasSemanalesEstimadas(proyecto);
+        HorasDiferencia(proyecto);
+
+        desarrolladoresSobrantes = horasDiferencia / 160;
+        horasDesarrolladores = 160 * desarrolladores.Count();
+
+        var semanas = new int[4];
+        var semanasReales = new int[4];
+
+        // Calcular fechas límite para las semanas una vez
+        var diasMes = DateTime.DaysInMonth(_year, mes);
+        var fechaInicioMes = new DateTime(_year, mes, 1);
+        var mediaDias = diasMes / 4.0;
+        var limitesSemanas = Enumerable.Range(1, 4).Select(i => fechaInicioMes.AddDays(i * mediaDias)).ToArray();
+
+        // Obtener todos los registros de checkin-checkout de una sola vez
+         checkinCheckouts = _ApplicationDbContext.CheckinCheckouts
+            .Include(it => it.Usuario).ThenInclude(it => it.Rol)
+            .Where(cc => cc.Proyecto.Id == proyecto.Id && cc.Fecha.Month == mes)
+            .OrderBy(cc => cc.Usuario.Id)
+            .ThenBy(cc => cc.Fecha)
+            .ToList();
+
+        // Calcular valores para cada semana
+        for (int i = 0; i < 4; i++)
+        {
+            semanas[i] = SemanaProyecto(proyecto, i + 1, limitesSemanas);
+            semanasReales[i] = CalcularHorasTotales(checkinCheckouts, proyecto, i + 1);
+        }
+
+        // Calcular las horas de desarrollo total y real
+        horasDesarrollo = semanas.Sum();
+        horasDesarrolloReal = horasDesarrollo - semanasReales.Sum();
+
+        // Crear el objeto InfoProyectos con la información calculada
+        var infoProyectoActual = new InfoProyectos(
+            mesActual,
+            semanas[0], semanas[1], semanas[2], semanas[3],
+            semanasReales[0], semanasReales[1], semanasReales[2], semanasReales[3],
+            horasDesarrollo, horasDesarrolloReal,
+            horasDesarrolladores, horasDiferencia, desarrolladoresSobrantes,
+            new List<InfoProyectos>(),
+            new List<Proyecto>()
+        );
+
+        // Agregar el objeto InfoProyectos a la lista de subproyectos actuales
+        subProyectosActuales.Add(infoProyectoActual);
+    }
+
+
+
+
+    private int SemanaProyecto(Proyecto proyecto, int semana, DateTime[] limitesSemanas)
+    {
+        var fechaLimiteSemana = limitesSemanas[semana - 1];
+
+        if (proyecto.FechaPrevistaContrato < fechaLimiteSemana && fechaLimiteSemana < proyecto.FechaPrevistaEntrega)
+        {
+            return horasSemanales;
+        }
+        else
+        {
+            return 0;
+        }
+    }
+
+
+    private int CalcularHorasTotales(List<CheckinCheckout> checkinCheckouts, Proyecto proyecto, int semana)
+    {
+        var checkinCheckoutsFiltrados = checkinCheckouts
+            .Where(cc => (cc.Fecha.Day - 1) / 7 + 1 == semana);
+
+        var horasPorUsuarioYDia = new Dictionary<string, Dictionary<DateTime, int>>();
+        var items = new List<HoraItem>();
+
+        foreach (var checkinCheckout in checkinCheckoutsFiltrados)
+        {
+            string usuarioId = checkinCheckout.Usuario.Id;
+            DateTime fecha = checkinCheckout.Fecha.Date;
+            int hora = checkinCheckout.Fecha.Hour;
+            decimal porcentajeConversion = checkinCheckout.Usuario.Rol.PorcentajeConversion;
+
+            if (!horasPorUsuarioYDia.ContainsKey(usuarioId))
+            {
+                horasPorUsuarioYDia[usuarioId] = new Dictionary<DateTime, int>();
+            }
+
+            if (checkinCheckout.Entrada)
+            {
+                horasPorUsuarioYDia[usuarioId][fecha] = hora;
+            }
+            else if (horasPorUsuarioYDia[usuarioId].ContainsKey(fecha))
+            {
+                int horasTrabajadas = hora - horasPorUsuarioYDia[usuarioId][fecha];
+                if (horasTrabajadas > 0)
+                {
+                    int horasConvertidas = (int)(horasTrabajadas * porcentajeConversion);
+                    var existingItem = items.FirstOrDefault(item => item.Text == checkinCheckout.Usuario.Nombre && item.Start.Date == fecha);
+
+                    if (existingItem == null)
+                    {
+                        items.Add(new HoraItem
+                            {
+                                Start = fecha,
+                                Text = checkinCheckout.Usuario.Nombre,
+                                Hora = horasConvertidas
+                            });
+                    }
+                    else
+                    {
+                        existingItem.Hora += horasConvertidas;
+                    }
+                }
+                horasPorUsuarioYDia[usuarioId].Remove(fecha);
+            }
+        }
+
+        horasRealizadas=(int)items.Sum(item => item.Hora);
+        return horasRealizadas;
+    }
+
+
+
+
+
+
+    private string TextSelection(string item, List<String> lista)
+    {
+        var texto = "";
+
+        if (lista.Count == 0)
+        {
+            texto = item;
+        }
+        else if (lista.Count == 1)
+        {
+            texto = lista.FirstOrDefault();
+        }
+        else
+        {
+            texto = "2 " + item + " o más seleccionados";
+            texto = texto.Substring(0, Math.Min(texto.Length, 25)) + "...";
+        }
+
+        return texto;
+    }
+
+    private async Task ToggleSelection(string item, List<String> lista)
+    {
+        if (lista.Contains(item))
+        {
+            lista.Remove(item);
+        }
+        else
+        {
+            lista.Add(item);
+        }
+        OnParametersSet();
+        render = false;
+        StateHasChanged();
+        await Task.Delay(1);
+        render = true;
+        await CargarInfoProyectosPorMes(_year);
+        StateHasChanged();
+        await Task.Delay(1);
+    }
+
+    private void CalcularHorasSemanalesEstimadas(Proyecto proyecto)
+    {
+        var diferencia = proyecto.FechaPrevistaEntrega - proyecto.FechaPrevistaContrato;
+        var semanasDiferencia = diferencia.Duration().Days / 7;
+        if (semanasDiferencia == 0)
+        {
+            horasSemanales = proyecto.HorasEstimadas;
+        }
+        else
+        {
+            horasSemanales = proyecto.HorasEstimadas / semanasDiferencia;
+        }
+    }
+
+
+    public async Task CargarProyectosPorMesYAnoBBDD()
+    {
+        var dateSelectedEntrega = new DateTime(_year, 12, 1);
+        var dateSelectedContrato = new DateTime(_year, 1, 12);
+
+        using var ctx = await DbFactory.CreateDbContextAsync(); //Usado para evitar excepción "InvalidOperationException: A second operation started on this context before a previous operation completed."
+        proyectos = await ctx.Proyectos
+                    .Where(p => dateSelectedContrato >= p.FechaPrevistaContrato && p.FechaPrevistaEntrega >= dateSelectedEntrega)
+                    .Include(p => p.Estado)
+                    .ToListAsync();
+    }
+
+    public async Task CargarProyectosPorMesYAnoBBDD(int mes)
+    {
+        var dateSelectedEntrega = new DateTime(_year, mes, 1);
+        var diasMes = DateTime.DaysInMonth(_year, mes);
+        var dateSelectedContrato = new DateTime(_year, mes, diasMes);
+
+        using var ctx = await DbFactory.CreateDbContextAsync(); //Usado para evitar excepción "InvalidOperationException: A second operation started on this context before a previous operation completed."
+        proyectos = await ctx.Proyectos
+                    .Where(p => dateSelectedContrato >= p.FechaPrevistaContrato && p.FechaPrevistaEntrega >= dateSelectedEntrega)
+                    .Include(p => p.Estado)
+                    .ToListAsync();
+    }
+
+    public async Task CargarDesarrolladoresPlantilla()
+    {
+        var rolesIds = rolesPlantilla.Select(rol => rol.Id).ToList();
+
+        var listaActualDesarrolladores = await _ApplicationDbContext.Users
+            .Where(d => rolesIds.Contains(d.Rol.Id))
+            .ToListAsync();
+
+        desarrolladores.AddRange(listaActualDesarrolladores);
+    }
+
+
+    private async Task CargarEstadosProyecto()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        _estados = _estados = ctx.Estados.OrderBy(e => e.Orden).ToList();
+
+        _selectedEstados = _estados.Where(s => !s.Oculto).Select(s => s.Nombre).ToList();
+
+    }
+
+    public async Task CargarRolesPlantilla()
+    {
+        rolesPlantilla = await _ApplicationDbContext.Roles
+                         .Where(r => r.Plantilla == true).ToListAsync();
+    }
+
+    private void HorasDiferencia(Proyecto proyecto)
+    {
+        horasDiferencia = horasDesarrolladores - horasTotalSemanas;
+    }
+
+    public async Task ExportarDatosExcel()
+    {
+        // Asegurar que hay datos para exportar
+        if (infoProyectos == null || infoProyectos.Count == 0)
+        {
+            Console.WriteLine("No hay datos en el calendario para mostrar.");
+            return;
+        }
+
+
+        SpreadsheetInfo.SetLicense("E7OT-N392-PMUC-Q7ZS");
+        ExcelFile workbook = new ExcelFile();
+        ExcelWorksheet worksheet = workbook.Worksheets.Add("Datos Balance "+_year.ToString());
+        ListtoDataTableConverter converter = new ListtoDataTableConverter();
+        List<ExportInfoExcel> listaExportar = new List<ExportInfoExcel>();
+
+        foreach (var infoProyecto in infoProyectos)
+        {
+            ExportInfoExcel exportInfoProyectos = new ExportInfoExcel
+                {
+                    Mes = infoProyecto.Mes,
+                    Semana1 = infoProyecto.Semana1,
+                    Semana2 = infoProyecto.Semana2,
+                    Semana3 = infoProyecto.Semana3,
+                    Semana4 = infoProyecto.Semana4,
+                    Semana1Real=infoProyecto.Semana1real,
+                    Semana2Real=infoProyecto.Semana2real,
+                    Semana3Real=infoProyecto.Semana3real,
+                    Semana4Real=infoProyecto.Semana4real,
+                    HorasDesarrolloMes = infoProyecto.HorasTotalDesarrolladas,
+                    HorasDesarrolladoresMes = infoProyecto.TotalHorasPosiblesDesarrolladores,
+                    DiferenciaHorasTrabajoMes = infoProyecto.DiferenciaHorasDesarrolladas,
+                    DesarrolladoresSobrantes = infoProyecto.DesarrolladoresSobrantes
+                };
+
+            listaExportar.Add(exportInfoProyectos);
+        }
+
+        DataTable dt = converter.ToDataTable(listaExportar);
+
+        InsertDataTableOptions options = new InsertDataTableOptions() { ColumnHeaders = true };
+        worksheet.InsertDataTable(dt, options);
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            workbook.Save(memoryStream, GemBox.Spreadsheet.XlsxSaveOptions.XlsDefault);
+            memoryStream.Position = 0;
+
+            await _jSRuntime.InvokeVoidAsync("downloadFile", "Datos_Balance_" + _year.ToString() + ".xlsx", Convert.ToBase64String(memoryStream.ToArray()));
+        }
+    }
+
+    private class ExportInfoExcel
+    {
+        public string Mes { get; set; }
+        public int Semana1 { get; set; }
+        public int Semana2 { get; set; }
+        public int Semana3 { get; set; }
+        public int Semana4 { get; set; }
+        public int Semana1Real { get; set; }
+        public int Semana2Real { get; set; }
+        public int Semana3Real { get; set; }
+        public int Semana4Real { get; set; }
+        public int HorasDesarrolloMes { get; set; }
+        public int HorasDesarrolladoresMes { get; set; }
+        public int DiferenciaHorasTrabajoMes { get; set; }
+        public double DesarrolladoresSobrantes { get; set; }
+    }
+
+    private void CargarListaMeses()
+    {
+        meses.Add("Enero");
+        meses.Add("Febrero");
+        meses.Add("Marzo");
+        meses.Add("Abril");
+        meses.Add("Mayo");
+        meses.Add("Junio");
+        meses.Add("Julio");
+        meses.Add("Agosto");
+        meses.Add("Septiembre");
+        meses.Add("Octubre");
+        meses.Add("Noviembre");
+        meses.Add("Diciembre");
+    }
+}

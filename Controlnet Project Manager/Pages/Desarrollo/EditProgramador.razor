@@ -1,0 +1,141 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Microsoft.EntityFrameworkCore;
+
+@inject AuthenticationStateProvider _auth;
+@inject UserManager<CPMUser> _UserManager
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+@if (allow.HasValue && allow.Value)
+{
+    <MudDialog>
+        <DialogContent>
+            <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+                <MudSelect Clearable Label="Programador" @bind-Value="desarrollo.UsuarioAsignado" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var item in _programadores)
+                    {
+                        <MudSelectItem Value="@item">@item.Nombre</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudForm>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+            <MudButton OnClick="Cancel">Cancelar</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+else if (allow.HasValue && !allow.Value)
+{
+    <MudDialog>
+        <DialogContent>
+            ¿Quieres asignarte como programador en @desarrollo.Nombre?
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Submit" Color="Color.Primary">Sí</MudButton>
+            <MudButton OnClick="Cancel">No</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Desarrollo desarrollo { get; set; }
+    [Parameter]
+    public CPMUser usuario { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Parameter] public bool? allow { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<CPMUser> _programadores = new List<CPMUser>();
+    bool? esAdmin;
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        cargarProgramadores();
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(desarrollo).Reload();
+    }
+
+    private async Task Submit()
+    {
+
+        try
+        {
+            if (allow.HasValue && allow.Value)
+            {
+                await form.Validate();
+
+                if (form.IsValid)
+                {
+                    if (desarrollo.Id != 0 && desarrollo.Id != null)
+                    {
+                        if (desarrollo.EstadoDesarrollo.Nombre == "Terminado")
+                        {
+                            desarrollo.FechaFinalizacion = DateTime.Now;
+                        }
+                        else
+                        {
+                            desarrollo.FechaFinalizacion = null;
+                        }
+
+                        _ApplicationDbContext.Desarrollos.Update(desarrollo);
+                    }
+
+                    await _ApplicationDbContext.SaveChangesAsync();
+                    if (desarrollo.UsuarioAsignado != null)
+                    {
+                        //await SendMail.SendMailVoid("Asignación desarrollo", desarrollo.UsuarioAsignado.Email, "Se le ha asignado un nuevo desarrollo (" + desarrollo.Nombre + ")");
+                    }
+                    MudDialog.Close(DialogResult.Ok<Desarrollo>(desarrollo));
+                    
+                }
+            }
+            else if (allow.HasValue && !allow.Value)
+            {
+                var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == usuario.Id);
+
+                desarrollo.UsuarioAsignado = user;
+
+                _ApplicationDbContext.Desarrollos.Update(desarrollo);
+                await _ApplicationDbContext.SaveChangesAsync();
+
+                MudDialog.Close(DialogResult.Ok<Desarrollo>(desarrollo));
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Error", ex.Message);
+        }
+    }
+
+    private void  cargarProgramadores()
+    {
+        _programadores =  _ApplicationDbContext.Users
+        .Where(usuario => _ApplicationDbContext.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+        .ToList();
+    }
+
+}
+

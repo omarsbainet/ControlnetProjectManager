@@ -1,0 +1,114 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject UserManager<CPMUser> _UserManager
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudSelect Label="Estado" @bind-Value="incidencia.EstadoIncidencia" ToStringFunc="@((s) => { return s?.Nombre;})" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @foreach (var item in lstEstadoIncidencia)
+                {
+                    <MudSelectItem Value="@item"></MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Incidencia incidencia { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    // Nuevos parámetros recibidos
+    [Parameter] public bool canEdit { get; set; }
+    [Parameter] public bool canFinish { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<EstadoIncidencia> lstEstadoIncidencia = new List<EstadoIncidencia>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (incidencia.Id != 0 && incidencia.Id != null)
+        {
+            incidencia = _ApplicationDbContext.Incidencias.FirstOrDefault(u => u.Id == incidencia.Id);
+        }
+        await cargarEstados();
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(incidencia).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (incidencia.Id != 0 && incidencia.Id != null)
+                {
+                    if (incidencia.EstadoIncidencia.CierraIncidencia)
+                    {
+                        incidencia.FechaCerrada = DateTime.Now;
+                    }
+                    else if (incidencia.EstadoIncidencia.Nombre.ToUpper() != "VERIFICADO POR CLIENTE")
+                    {
+                        incidencia.FechaCerrada = null;
+                    }
+                    _ApplicationDbContext.Incidencias.Update(incidencia);
+                }
+                _ApplicationDbContext.SaveChanges();
+                MudDialog.Close(DialogResult.Ok<Incidencia>(incidencia));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    async Task cargarEstados()
+    {
+
+        var userId = _UserManager.GetUserId((await _auth.GetAuthenticationStateAsync()).User);
+        var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == userId);
+
+        if (user.Rol.Name.ToUpper() =="CLIENTE")
+        {
+            lstEstadoIncidencia = _ApplicationDbContext.EstadosIncidencias.Where(it => it.EstadoCl == true).OrderBy(it => it.Nombre).ToList();
+        }
+        else
+        {
+            lstEstadoIncidencia = _ApplicationDbContext.EstadosIncidencias.OrderBy(it => it.Nombre).ToList();
+        }
+
+    }
+
+}
+

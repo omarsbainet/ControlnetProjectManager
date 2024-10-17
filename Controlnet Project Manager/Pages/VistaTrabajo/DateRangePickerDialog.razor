@@ -1,0 +1,78 @@
+﻿<style>
+    .tight-dialog .mud-dialog {
+        margin: 0; /* Elimina los márgenes alrededor del diálogo */
+        padding: 0; /* Elimina el relleno dentro del diálogo */
+    }
+
+    .tight-dialog .mud-dialog-content {
+        padding: 0; /* Elimina el relleno interior para ajustarse más al contenido */
+    }
+
+    .tight-dialog .mud-paper {
+        margin: 0; /* Elimina los márgenes alrededor del papel */
+        border: none; /* Opcional: elimina cualquier borde si está presente */
+    }
+
+    .date-picker-dialog {
+        width: 100%; /* Asegura que el date picker use todo el ancho disponible */
+    }
+
+    .mud-dialog-title {
+        display: none; /* Oculta la barra de título completa */
+    }
+
+    .btnCancelar{
+        position: absolute;
+        left: 580px;
+        z-index: 1000;
+    }
+
+
+</style>
+@using MudBlazor
+<MudDialog Class="tight-dialog" Style="width: auto; max-width: 100%;">
+
+    <DialogContent>
+        <div>
+            <MudIconButton Class="btnCancelar" Icon="@Icons.Material.Filled.Cancel" IconColor="Color.Primary" OnClick="@Cancel"></MudIconButton>
+        </div>
+        <MudDateRangePicker Class="date-picker-dialog" PickerVariant="PickerVariant.Static" @bind-DateRange="dateRange" />
+        <!-- Contenedor principal para los botones, con espacio entre para empujar el botón de cancelar a la derecha -->
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; width: 100%;">
+            <!-- Contenedor para el botón Aceptar (y Resetear si necesario), centrado en el diálogo -->
+            <div style="display: flex; justify-content: center; flex-grow: 1;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@Submit">Aceptar</MudButton>
+                @if (ShowResetButton)
+                {
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@SubmitEmpty" class="ml-2">Resetear fechas</MudButton>
+                }
+            </div>
+            <!-- Botón de cancelar alineado a la derecha -->
+
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public DateRange? dateRange { get; set; }
+    [Parameter] public bool ShowResetButton { get; set; } = true;
+
+    private void Submit()
+    {
+        MudDialog.Close(dateRange);
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+        MudDialog.Close();
+    }
+
+    private void SubmitEmpty()
+    {
+        MudDialog.Close(new DateRange(null, null));
+    }
+}

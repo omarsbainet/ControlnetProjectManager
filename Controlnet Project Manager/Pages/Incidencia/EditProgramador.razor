@@ -1,0 +1,178 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Microsoft.EntityFrameworkCore;
+@using BlazorServerHub
+@inject Notis Notis
+
+@inject AuthenticationStateProvider _auth;
+@inject UserManager<CPMUser> _UserManager
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject Notis Notis;
+
+@if (allow.HasValue && allow.Value)
+{
+    <MudDialog>
+        <DialogContent>
+            <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+                <MudSelect Clearable Label="Programador" @bind-Value="incidencia.UsuarioAsignado" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var item in _programadores)
+                    {
+                        <MudSelectItem Value="@item">@item.Nombre</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudForm>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+            <MudButton OnClick="Cancel">Cancelar</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+else if (allow.HasValue && !allow.Value)
+{
+    <MudDialog>
+        <DialogContent>
+            ¿Quieres asignarte como programador en @incidencia.Nombre?
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Submit" Color="Color.Primary">Sí</MudButton>
+            <MudButton OnClick="Cancel">No</MudButton>
+        </DialogActions>
+    </MudDialog>
+}
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Incidencia incidencia { get; set; }
+    [Parameter]
+    public CPMUser usuario { get; set; }
+    private CPMUser userNull { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Parameter] public bool? allow { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<CPMUser> _programadores = new List<CPMUser>();
+    bool? esAdmin;
+
+    public EditProgramador()
+    {
+    }
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+        cargarProgramadores();
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(incidencia).Reload();
+    }
+
+    private async Task Submit()
+    {
+        try
+        {
+
+            if (allow.HasValue && allow.Value)
+            {
+                await form.Validate();
+
+
+                if (form.IsValid)
+                {
+                    if (incidencia.Id != 0 && incidencia.Id != null)
+                    {
+                        if (incidencia.EstadoIncidencia.Nombre == "Cerrado" || incidencia.EstadoIncidencia.Nombre == "Cancelado")
+                        {
+                            incidencia.FechaCerrada = DateTime.Now;
+                        }
+                        else
+                        {
+                            incidencia.FechaCerrada = null;
+                        }
+
+                        _ApplicationDbContext.Incidencias.Update(incidencia);
+                    }
+                    await _ApplicationDbContext.SaveChangesAsync();
+
+                    if (incidencia.UsuarioAsignado != null)
+                    {
+
+                        var id = incidencia.UsuarioAsignado.Id;
+
+
+                       await SendNotificacion(id, $"Incidencia Asignada : {incidencia.Nombre}");
+
+                        _ApplicationDbContext.Notificaciones.Add(await MakeNotificacion(id, proyecto.Nombre, incidencia.Nombre, false, $"Proyectos/{proyecto.Id}", proyecto.Id, false));
+                       // await SendMail.SendMailVoid("Asignación incidencia", incidencia.UsuarioAsignado.Email, "Se le ha asignado una nueva incidencia (" + incidencia.Nombre + ")");
+                    }
+
+                    MudDialog.Close(DialogResult.Ok<Incidencia>(incidencia));
+                }
+            }
+            else if (allow.HasValue && !allow.Value)
+            {
+                var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == usuario.Id);
+
+                incidencia.UsuarioAsignado = user;
+
+                _ApplicationDbContext.Incidencias.Update(incidencia);
+                await _ApplicationDbContext.SaveChangesAsync();
+
+                MudDialog.Close(DialogResult.Ok<Incidencia>(incidencia));
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowMessageBox("Error", ex.Message);
+        }
+    }
+
+    private void cargarProgramadores()
+    {
+        _programadores = _ApplicationDbContext.Users
+            .Where(usuario => _ApplicationDbContext.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+            .ToList();
+    }
+
+    private async Task SendNotificacion(string idusuario, string mensaje)
+    {
+        //Llama a Send de la clase notis, el cual es un context de la clase NotificacionesHub.
+        //Contiene la hora y la fecha de cuando se creó la incidencia
+        await Notis.send(idusuario, $"{mensaje} | {DateTime.Now.Date.ToString().Substring(0, 7)} | {DateTime.Now.Hour}:{DateTime.Now.Minute}");
+    }
+
+    private async Task<Notificacion> MakeNotificacion(string iduser, string titulo, string mensaje, bool leida, string link, int index, bool eliminada)
+    {
+        //Se crea la notificacion
+        Notificacion notificacion = new();
+        //Se añaden cada atributo necesario a la notificacion
+        //Se obtiene el usuario y se establece en la notificacion
+        notificacion.IDUsuario = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == iduser);
+        notificacion.Descripcion = mensaje;
+        notificacion.Titulo = titulo;
+        notificacion.Leida = leida;
+        notificacion.Link = link;
+        notificacion.Index = index;
+        notificacion.Eliminada = eliminada;
+        //Finalmente se devuelve para su posterior insercción en la DB
+        return notificacion;
+    }
+}

@@ -1,0 +1,304 @@
+﻿@page "/ListaEstadosIncidencia"
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using System.Reflection;
+@using System.ComponentModel;
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+
+@attribute [Authorize]
+
+@{
+    List<Button> botones = new List<Button>()
+    {
+        new ActionButton { Text = "Nueva Incidencia",  OnClick = NewEstIncidencia , Icon = @Icons.Material.Filled.Add }
+    };
+}
+
+@if (!Cargando)
+{
+    @if (menuRol != null)
+    {
+        @if (menuRol.Crear)
+        {
+            <ToolBar Title="ESTADO&nbsp;DE&nbsp;LA&nbsp;INCIDENCIA" ButtonsLeft="botones"></ToolBar>
+        }
+        else
+        {
+            <ToolBar Title="ESTADO&nbsp;DE&nbsp;LA&nbsp;INCIDENCIA"></ToolBar>
+        }
+
+        <br />
+        <br />
+
+        <MudDataGrid @ref="@_grid" Items="@FiltrarEstIncidencia()" T="EstadoIncidencia" RowClick="@((x)=>EditEstIncidenciaDialog(x.Item))" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15">
+
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Estados Incidencias</MudText>
+                <MudSpacer />
+                <MudSpacer />
+                <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense"
+                              Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+                </MudTextField>
+            </ToolBarContent>
+
+            <Columns>
+                <PropertyColumn T="EstadoIncidencia" TProperty="string" Property="x => x.Nombre" Title="Nombre del estado de la incidencia" />
+                <TemplateColumn Sortable="true" Title="Activo">
+                    <CellTemplate>
+                        <span @onclick:stopPropagation="true">
+                            <MudTooltip Text="Activar/Desactivar">
+                                <MudSwitch T="bool" Checked="@context.Item.CierraIncidencia" ThumbIcon="@(context.Item.CierraIncidencia == false ? Icons.Material.Filled.Done : Icons.Material.Filled.Close)" ThumbIconColor="@(context.Item.CierraIncidencia == false ? Color.Success : Color.Error)" CheckedChanged="(e) => {if(menuRol != null && menuRol.Editar) CambiarEstado(e, context.Item);}" />
+                            </MudTooltip>
+                        </span>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false" Title="Notificar">
+                    <CellTemplate>
+                        <span @onclick:stopPropagation="true">
+                            <MudTooltip Text="Activar/Desactivar">
+                                <MudSwitch T="bool" Checked="@context.Item.Notificar"
+                                           ThumbIcon="@(context.Item.Notificar ? Icons.Material.Filled.Done : Icons.Material.Filled.Close)"
+                                           ThumbIconColor="@(context.Item.Notificar ? Color.Success : Color.Error)"
+                                           CheckedChanged="@( (e) =>  CambiarNotificar(e, context.Item))" />
+
+                            </MudTooltip>
+                        </span>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false" Title="Color">
+                    <CellTemplate>
+                        <div style="width: 20px; height: 20px; background-color: @context.Item.Color"></div>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false">
+                    <CellTemplate>
+                        @if (menuRol != null && menuRol.Editar)
+                        {
+                            <MudTooltip Text="Editar">
+                                <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EditEstIncidenciaDialog(context.Item); })" />
+                            </MudTooltip>
+                        }
+                        @if (menuRol != null && menuRol.Eliminar)
+                        {
+                            <MudTooltip Text="Eliminar">
+                                <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary : Color.Primary)" OnClick="@((e) => { EliminarEstado(context.Item); })" />
+                            </MudTooltip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+            <PagerContent>
+                <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+            </PagerContent>
+        </MudDataGrid>
+    }
+    else if (menuRol == null)
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+}
+else
+{
+    <ToolBar Title="ESTADO&nbsp;DE&nbsp;LA&nbsp;INCIDENCIA"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    public EstadoIncidencia Estadoincidencia { get; set; }
+    private MudDataGrid<EstadoIncidencia> _grid;
+    List<EstadoIncidencia> ListEstInc = new();
+    string _searchString = "";
+    private int _selectedPage;
+    EstadoIncidencia activado;
+    public CPMUser usuario { get; set; }
+    private bool Cargando = true;
+    private List<EstadoIncidencia> elementosCheckeados = new List<EstadoIncidencia>(); // Cambio aquí
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        usuario = Layout.usuario;
+
+        if(usuario != null)
+        {
+            url = GetLastSegmentUrl();
+            idMenu = GetIdMenu(url);
+            menuRol = await Crud.GetMenuRol(idMenu, usuario);
+
+            await cargarEstInc();
+            Cargando = false;
+            _selectedPage = 0;   
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (usuario == null)
+        {
+            await OnInitializedAsync();
+        }
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basePath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+    //Metodo para obtener la descripcion de un valor de un enum
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    async Task cargarEstInc()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        ListEstInc = ctx.EstadosIncidencias.ToList();
+        StateHasChanged();
+    }
+
+    private async Task CambiarEstado(bool? estado, EstadoIncidencia EstadoActivacion)
+    {
+        if (estado != null)
+        {
+            EstadoActivacion.CierraIncidencia = estado.Value;
+            _ApplicationDbContext.ChangeTracker.Clear();
+            _ApplicationDbContext.EstadosIncidencias.Update(EstadoActivacion);
+            _ApplicationDbContext.SaveChanges();
+        }
+        StateHasChanged();
+    }
+
+    private async Task CambiarNotificar(bool? estado, EstadoIncidencia EstadoActivacion)
+    {
+        if (estado != null)
+        {
+            EstadoActivacion.Notificar = estado.Value;
+            _ApplicationDbContext.ChangeTracker.Clear();
+            _ApplicationDbContext.EstadosIncidencias.Update(EstadoActivacion);
+            _ApplicationDbContext.SaveChanges();
+        }
+        StateHasChanged();
+    }
+
+    private List<EstadoIncidencia> FiltrarEstIncidencia()
+    {
+        return ListEstInc.FindAll(it =>
+            (it != null && it.Nombre != null && it.Nombre.ToUpper().Contains(_searchString.ToUpper())));
+    }
+
+    private async Task EditEstIncidenciaDialog(EstadoIncidencia estadoinc)
+    {
+        if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+            var parameters = new DialogParameters();
+            parameters.Add("EstadoIncidencia", estadoinc);
+
+            var dialog = await _dialogService.Show<NewEstadoIncidencia>("Editar estado de incidencia", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                await cargarEstInc();
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async void NewEstIncidencia()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+
+        var dialog = await _dialogService.Show<NewEstadoIncidencia>("Nuevo estado incidencia", parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            await cargarEstInc();
+            StateHasChanged();
+        }
+    }
+
+    private async void EliminarEstado(EstadoIncidencia estadoinc)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar estado de incidencia", "¿Seguro que quieres eliminar estado de incidencia?", "Si", "No");
+        estadoinc = _ApplicationDbContext.EstadosIncidencias.FirstOrDefault(it => it.Id == estadoinc.Id);
+
+        if (result is true && estadoinc != null)
+        {
+            _ApplicationDbContext.EstadosIncidencias.Remove(estadoinc);
+            await _ApplicationDbContext.SaveChangesAsync();
+        }
+
+        _ApplicationDbContext.EstadosIncidencias.OrderBy(it => it.Id).ToList();
+        await cargarEstInc();
+        StateHasChanged();
+    }
+
+    private void ToggleCheckbox(ChangeEventArgs e, EstadoIncidencia item)
+    {
+        var isChecked = (bool)e.Value;
+        if (isChecked)
+        {
+            elementosCheckeados.Add(item);
+        }
+        else
+        {
+            elementosCheckeados.Remove(item);
+        }
+    }
+}

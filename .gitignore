@@ -1,0 +1,121 @@
+/.vs
+/.vs/Controlnet Project Manager/DesignTimeBuild/.dtbcache.v2
+/.vs/Controlnet Project Manager/v17/.futdcache.v2
+/.idea/.idea.Controlnet Project Manager/.idea/.gitignore
+/.vs/Controlnet Project Manager/v17/.suo
+/.vs/Controlnet Project Manager/FileContentIndex/3efe0056-c8fa-4755-8e96-6bc05c8bce95.vsidx
+/.vs/Controlnet Project Manager/FileContentIndex/08eea9c8-ea09-49ce-a007-da1afbc5d541.vsidx
+/.vs/Controlnet Project Manager/FileContentIndex/031c83cb-1548-407f-9893-fe4a1b0aeefe.vsidx
+/.vs/Controlnet Project Manager/FileContentIndex/875eda15-bf40-4be3-84ca-ff618dcd147d.vsidx
+/Controlnet Project Manager/Migrations/20231106093350_menus.cs
+/Controlnet Project Manager/Migrations/20231106093350_menus.Designer.cs
+/Controlnet Project Manager/Migrations/20231107124029_cambiorol.cs
+/Controlnet Project Manager/Migrations/20231107124029_cambiorol.Designer.cs
+/Controlnet Project Manager/bin/Debug/net7.0/app.db
+/Controlnet Project Manager/obj/Debug/net7.0/apphost.exe
+/.idea/config/applicationhost.config
+/Controlnet Project Manager/bin/Debug/net7.0/appsettings.Development.json
+/Controlnet Project Manager/bin/Debug/net7.0/appsettings.json
+/.idea/.idea.Controlnet Project Manager/.idea/aws.xml
+/Controlnet Project Manager/bin/Debug/net7.0/Azure.Core.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Azure.Identity.dll
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.assets.cache
+/Controlnet Project Manager/obj/Debug/net7.0/scopedcss/projectbundle/Controlnet Project Manager.bundle.scp.css
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.csproj.CopyComplete
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.csproj.CoreCompileInputs.cache
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.csproj.FileListAbsolute.txt
+/Controlnet Project Manager/Controlnet Project Manager.csproj.user
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.deps.json
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.dll
+/Controlnet Project Manager/obj/Debug/net7.0/ref/Controlnet Project Manager.dll
+/Controlnet Project Manager/obj/Debug/net7.0/refint/Controlnet Project Manager.dll
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.exe
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.genruntimeconfig.cache
+/.vs/ProjectEvaluation/controlnet project manager.metadata.v7.bin
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.MvcApplicationPartsAssemblyInfo.cache
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.MvcApplicationPartsAssemblyInfo.cs
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.pdb
+/Controlnet Project Manager/obj/Debug/net7.0/Controlnet Project Manager.pdb
+/.vs/ProjectEvaluation/controlnet project manager.projects.v7.bin
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.runtimeconfig.json
+/Controlnet Project Manager/bin/Debug/net7.0/Controlnet Project Manager.staticwebassets.runtime.json
+/Controlnet Project Manager/obj/Debug/net7.0/scopedcss/bundle/Controlnet Project Manager.styles.css
+/.idea/.idea.Controlnet Project Manager/.idea/dataSources.xml
+/Controlnet Project Manager/bin/Debug/net7.0/Humanizer.dll
+/.idea/.idea.Controlnet Project Manager/.idea/indexLayout.xml
+/Controlnet Project Manager/obj/Debug/net7.0/scopedcss/Shared/MainLayout.razor.rz.scp.css
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Authorization.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Components.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Components.Forms.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Components.Web.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Cryptography.Internal.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Cryptography.KeyDerivation.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Identity.UI.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.AspNetCore.Metadata.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Bcl.AsyncInterfaces.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/unix/lib/netcoreapp3.1/Microsoft.Data.SqlClient.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netcoreapp3.1/Microsoft.Data.SqlClient.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Data.SqlClient.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win-arm/native/Microsoft.Data.SqlClient.SNI.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win-arm64/native/Microsoft.Data.SqlClient.SNI.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win-x64/native/Microsoft.Data.SqlClient.SNI.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win-x86/native/Microsoft.Data.SqlClient.SNI.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.EntityFrameworkCore.Abstractions.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.EntityFrameworkCore.Design.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.EntityFrameworkCore.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.EntityFrameworkCore.Relational.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.EntityFrameworkCore.SqlServer.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.DependencyModel.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.FileProviders.Embedded.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.Identity.Core.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.Identity.Stores.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.Localization.Abstractions.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.Localization.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Extensions.Options.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Identity.Client.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Identity.Client.Extensions.Msal.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.Abstractions.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.JsonWebTokens.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.Logging.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.Protocols.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.IdentityModel.Tokens.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.JSInterop.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.SqlServer.Server.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netcoreapp3.0/Microsoft.Win32.SystemEvents.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Microsoft.Win32.SystemEvents.dll
+/Controlnet Project Manager/bin/Debug/net7.0/Mono.TextTemplating.dll
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets/msbuild.build.Controlnet Project Manager.props
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets/msbuild.buildMultiTargeting.Controlnet Project Manager.props
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets/msbuild.buildTransitive.Controlnet Project Manager.props
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets/msbuild.Controlnet Project Manager.Microsoft.AspNetCore.StaticWebAssets.props
+/Controlnet Project Manager/bin/Debug/net7.0/MudBlazor.dll
+/Controlnet Project Manager/bin/Debug/net7.0/MySqlConnector.dll
+/Controlnet Project Manager/obj/Debug/net7.0/scopedcss/Shared/NavMenu.razor.rz.scp.css
+/Controlnet Project Manager/bin/Debug/net7.0/Pomelo.EntityFrameworkCore.MySql.dll
+/.vs/Controlnet Project Manager/FileContentIndex/read.lock
+/Controlnet Project Manager/obj/rider.project.model.nuget.info
+/Controlnet Project Manager/obj/rider.project.restore.info
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets.build.json
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets.development.json
+/Controlnet Project Manager/obj/Debug/net7.0/staticwebassets.pack.json
+/Controlnet Project Manager/bin/Debug/net7.0/System.CodeDom.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Configuration.ConfigurationManager.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/unix/lib/netcoreapp3.0/System.Drawing.Common.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netcoreapp3.0/System.Drawing.Common.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Drawing.Common.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.IdentityModel.Tokens.Jwt.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Memory.Data.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netstandard2.0/System.Runtime.Caching.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Runtime.Caching.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netstandard2.0/System.Security.Cryptography.ProtectedData.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Security.Cryptography.ProtectedData.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Security.Permissions.dll
+/Controlnet Project Manager/bin/Debug/net7.0/runtimes/win/lib/netcoreapp3.0/System.Windows.Extensions.dll
+/Controlnet Project Manager/bin/Debug/net7.0/System.Windows.Extensions.dll
+/.idea/.idea.Controlnet Project Manager/.idea/vcs.xml
+/Controlnet Project Manager/bin/
+/Controlnet Project Manager/obj/

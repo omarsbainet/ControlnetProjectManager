@@ -1,0 +1,925 @@
+﻿@using Blazored.TextEditor;
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Newtonsoft.Json.Linq;
+@using System;
+@using System.Net.Http;
+@using System.Text;
+@using System.Threading.Tasks;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+@using Microsoft.EntityFrameworkCore;
+@using Severity = MudBlazor.Severity;
+@inject ISnackbar Snackbar;
+@inject CRUD crud;
+@inject IJSRuntime JSRuntime
+@inject ISnackbar snackbar;
+@using BlazorServerHub
+@using Controlnet_Project_Manager.Data
+@using Microsoft.AspNet.SignalR.Client.Transports
+@using Microsoft.AspNetCore.SignalR;
+@using Microsoft.AspNet.SignalR.Client;
+@inject Notis Notis;
+@using Newtonsoft.Json;
+
+@inject AuthenticationStateProvider _auth;
+@inject UserManager<CPMUser> _UserManager
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext;
+@inject FileService fileService;
+@inject IDialogService dialogService
+@inject NavigationManager _navigation
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            @if (peticion != null)
+            {
+                <MudIconButton OnClick="CambioIcono" Class="icon-position rounded-circle" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Icon="@Icons.Material.Outlined.Error"></MudIconButton>
+            }
+                <MudTabs Class="@((peticion!=null) ? "mud-tabs-toolbar-componente mud-tabs-panels-componente" : " ")" Elevation="6" Rounded="true">
+                @*class="@((condicion) ? "estilos-para-true" : "estilos-para-false")"*@
+                <MudTabPanel OnClick="CambioPanel" Text="Información">
+                    <br />
+                    <br />
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudAutocomplete T="CPMUser" Label="Programador" @bind-Value="incidencia.UsuarioAsignado" SearchFunc="@Search2"
+                                             ResetValueOnEmptyText="@resetValueOnEmptyText"
+                                             CoerceText="@coerceText" CoerceValue="@coerceValue"
+                                             AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary" Disabled="isDisabled">
+                                <ItemTemplate>
+                                    @context.Nombre
+                                </ItemTemplate>
+                            </MudAutocomplete>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudSelect Label="Estado" @bind-Value="incidencia.EstadoIncidencia" ToStringFunc="@(it=> it==null? "" : it.Nombre)" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar estado">
+                               
+                            @foreach (var item in lstEstadoIncidencia)
+                            {
+                                <MudSelectItem Value="@item"></MudSelectItem>
+                            }
+
+                               
+                            </MudSelect>
+                        </MudItem>
+                    </MudGrid>
+                    <MudGrid>
+                        <MudItem xs="6">
+                            <MudTextField xs="6" @bind-Value="incidencia.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" Disabled="@isDisabled" />
+                        </MudItem>
+                        <MudItem xs="6">
+                            @if (incidencia.Autor == null)
+                            {
+                                <MudTextField xs="6" T="string" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true">No tiene autor</MudTextField>
+                            }
+                            else
+                            {
+                                <MudTextField xs="6" @bind-Value="incidencia.Autor.Nombre" Label="Autor" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                            }
+                        </MudItem>
+                    </MudGrid>
+                    <MudGrid>
+                        <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8">
+                            <MudDatePicker Date="@incidencia.FechaCreacion" DateChanged="e => incidencia.FechaCreacion = e.Value.Date" Label="Fecha de Creacion" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                        </MudItem>
+                        <MudItem xs="6" Class="d-flex align-center justify-center mud-width-full py-8">
+                            <MudDatePicker Date="@incidencia.FechaCerrada" DateChanged="e => incidencia.FechaCerrada = e?.Date" Label="Fecha de Cerrada" Variant="Variant.Outlined" Margin="Margin.Dense" ReadOnly="true" Disabled="true" />
+                        </MudItem>
+                    </MudGrid>
+
+                    <BlazoredTextEditor @ref="@QuillHtml" EditorCssStyle="height: 250px" Placeholder="No hay descripcion" ReadOnly="isDisabled">
+                        <ToolbarContent>
+                            <select class="ql-header">
+                                <option selected=""></option>
+                                <option value="1"></option>
+                                <option value="2"></option>
+                                <option value="3"></option>
+                                <option value="4"></option>
+                                <option value="5"></option>
+                            </select>
+                            <span class="ql-formats">
+                                <button class="ql-bold"></button>
+                                <button class="ql-italic"></button>
+                                <button class="ql-underline"></button>
+                                <button class="ql-strike"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <select class="ql-color"></select>
+                                <select class="ql-background"></select>
+                            </span>
+                            <span class="ql-formats">
+                                <button class="ql-list" value="ordered"></button>
+                                <button class="ql-list" value="bullet"></button>
+                            </span>
+                            <span class="ql-formats">
+                                <MudIconButton Class="custom-iconButton" OnClick="addIncidenciaHija" Icon="@Icons.Material.Filled.AddCircle"></MudIconButton>
+                            </span>
+                        </ToolbarContent>
+                        <EditorContent>
+                            @if (incidencia.Informacion != null)
+                            {
+                                @((MarkupString)incidencia.Informacion)
+                            }
+                            else
+                            {
+                                incidencia.Informacion = "No hay información disponible";
+                            }
+                        </EditorContent>
+                    </BlazoredTextEditor>
+
+                </MudTabPanel>
+                <MudTabPanel OnClick="CambioPanel" Text="Documentos" Disabled="@isDisabled">
+                    <br />
+                    <br />
+                    <MudForm Model="@doc" @ref="@formDoc" ValidationDelay="0">
+                        @if (lstDocIncidencia != null && lstDocIncidencia.Count != 0)
+                        {
+                            <MudDataGrid @ref="@_grid" T="DocumentoIncidencia" Items="@FiltrarDocumentos()" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="5" CurrentPage="@_selectedPage">
+                                <ToolBarContent>
+                                    <MudText Typo="Typo.h6">Documentos</MudText>
+                                    <MudSpacer />
+                                    <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos" AppendMultipleFiles>
+                                    <ButtonTemplate>
+                                        <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                        <MudIconButton OnClick="@DescargarTodo" Variant="Variant.Filled" Color="Color.Primary" Icon="@IconoDescarga" />
+                                    </ButtonTemplate>
+                                </MudFileUpload>
+                                <MudSpacer />
+                                <MudSelect T="string" Label="Tipo documentación" AnchorOrigin="Origin.BottomCenter" @bind-Value="@tipoDoc" Variant="Variant.Outlined" Margin="Margin.Dense" @onchange="@HandleTipoDocChange" Clearable>
+                                    @foreach (string s in listaExtensiones)
+                                        {
+                                            <MudSelectItem Value="@s">@s</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </ToolBarContent>
+                                <Columns>
+                                    <PropertyColumn Property="x => GetWithoutExtension(x)" title="Nombre"></PropertyColumn>
+                                    <PropertyColumn Property="x => GetExtension(x)" title="Tipo Documento"></PropertyColumn>
+                                    <TemplateColumn>
+                                        <CellTemplate>
+                                            <MudTooltip Text="Descargar">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { DescargarArchivo(context.Item.Id, context.Item.Nombre); })"></MudIconButton>
+                                            </MudTooltip>
+                                        </CellTemplate>
+                                    </TemplateColumn>
+                                    <TemplateColumn>
+                                        <CellTemplate>
+                                            <MudTooltip Text="Eliminar">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Primary" OnClick="@(() => ShowConfirmationDialog(context.Item))"></MudIconButton>
+                                            </MudTooltip>
+                                        </CellTemplate>
+                                    </TemplateColumn>
+                                </Columns>
+
+                                <PagerContent>
+                                    <MudPagination SelectedChanged="PageChanged" Count="@((_grid?.GetFilteredItemsCount() ?? 0 + _grid?.RowsPerPage ?? 0 - 1) / _grid?.RowsPerPage ?? 1)" Class="pa-4" />
+                                </PagerContent>
+                            </MudDataGrid>
+                        }
+                        else
+                        {
+                            <MudText>No hay documentos en esta incidencia</MudText>
+                            <MudSpacer />
+                            <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos">
+                                <ButtonTemplate>
+                                    <MudIconButton HtmlTag="label" Variant="Variant.Filled" Color="Color.Primary" for="@context" Icon="@Icons.Material.Filled.CloudUpload" />
+                                </ButtonTemplate>
+                            </MudFileUpload>
+                        }
+                    </MudForm>
+                </MudTabPanel>
+            </MudTabs>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="@(() => Submit())">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+
+    .icon-position {
+        position: absolute;
+        z-index: 1000;
+        top: 18px;
+    }
+
+    .mud-tabs-toolbar-componente .mud-tabs-toolbar {
+        position: absolute;
+        background-color: var(--mud-palette-surface);
+        left: 70px;
+        width: 90%;
+        z-index:1000;
+    }
+
+    .mud-tabs-panels-componente .mud-tabs-panels {
+        margin-top: 3%;
+    }
+
+    .custom-iconButton{
+        bottom: 3px;
+        position: relative;
+    }
+
+</style>
+
+@code {
+    //Variables y Parametros
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Incidencia incidencia { get; set; }
+    [Parameter] public MainLayout main { get; set; } = new MainLayout();
+    public Notificacion notificacion { get; set; }
+    [Parameter] public Incidencia incidenciapadre { get; set; }
+    public EstadoIncidencia estadoIncidencia { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; } = new Proyecto();
+    [Parameter] public EventCallback<Incidencia> OnNewIncidencia { get; set; }
+    [Parameter] public List<DocumentoPeticion> listaDocumentoPeticion { get; set; }
+    [Parameter] public Peticion peticion { get; set; }
+    [Parameter] public EventCallback<bool> onChangeIcon { get; set; }
+    [Parameter] public EventCallback<Incidencia> OnGetDataIncidencia{ get; set; }
+    [Parameter] public EventCallback<List<DocumentoIncidencia>> OnGetListaDocumentoIncidencia { get; set; }
+
+    [Inject] private IDialogService DialogService { get; set; }
+    private static readonly HttpClient client = new HttpClient();
+
+    private string id;
+
+    private MudForm formDoc;
+    private DocumentoIncidencia doc = new();
+    private string fileContent;
+    private IBrowserFile file;
+    List<DocumentoIncidencia> lstDocIncidencia { get; set; } = new();
+    private MudDataGrid<DocumentoIncidencia>? _grid;
+    private const string DefaultDragClass = "relative rounded-lg border-2 border-dashed pa-4 mt-4 mud-width-full mud-height-full z-10";
+    private string _dragClass = DefaultDragClass;
+    private readonly IList<IBrowserFile> files;
+    List<string> listaExtensiones = new();
+    List<DocumentoIncidencia> filteredDocs;
+    private bool changeIcon = false;
+    private bool panelInformacion = true;
+    private BlazoredTextEditor QuillHtml;
+    [Parameter] public CPMUser usuario { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<EstadoIncidencia> lstEstadoIncidencia = new List<EstadoIncidencia>();
+    List<CPMUser> lstUsers = new List<CPMUser>();
+
+    string IconoDescarga = Icons.Material.Filled.Download;
+
+    private string descripcion = "";
+
+    [Parameter] public string EstadoAnt { get; set; }
+    [Parameter] public bool canEdit { get; set; }
+    [Parameter] public bool canFinish { get; set; }
+    private bool isDisabled;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isDisabled = canFinish && !canEdit;
+
+        await base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (peticion != null)
+                {
+                    if(incidencia == null)
+                    {
+                        incidencia = new();
+                        incidencia.FechaCreacion = DateTime.Now;
+                        incidencia.FechaCerrada = peticion.FechaEntrega;
+                        incidencia.Autor = _ApplicationDbContext.Users.First(c => c.Id == usuario.Id);
+                        incidencia.Informacion = peticion.Informacion;
+                        incidencia.Nombre = peticion.Nombre;
+                    }
+
+                }
+                else if(incidencia == null)
+                {
+                    incidencia = new Incidencia();
+                    incidencia.FechaCreacion = DateTime.Now;
+                    incidencia.Autor = _ApplicationDbContext.Users.First(c => c.Id == usuario.Id);
+                }
+                if (incidencia.Id != 0 && incidencia.Id != null)
+                {
+                    incidencia = _ApplicationDbContext.Incidencias.Include(u => u.Autor).FirstOrDefault(u => u.Id == incidencia.Id);
+
+                    await cargarDocs(incidencia.Id);
+                }
+
+
+                await cargarEstados();
+                await cargaUsuario();
+                GetListaExtension(lstDocIncidencia);
+                ConvertirLista();
+
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(lstDocIncidencia, idArchivo, nombreArchivo);
+    }
+
+    private async Task DescargarTodo()
+    {
+        if (lstDocIncidencia != null && lstDocIncidencia.Count != 0)
+        {
+            foreach (DocumentoIncidencia d in lstDocIncidencia)
+            {
+                await fileService.DescargarArchivo(lstDocIncidencia, d.Id, d.Nombre);
+            }
+        }
+        else
+        {
+            Snackbar.Add("No hay archivos disponibles.", Severity.Warning);
+        }
+    }
+
+    //Recibe como parametros:
+    // string idusuario que es al usuario que se enviará el mensaje
+    // string mensaje, es el contenido que tendra el mensaje que se enviará al usuario
+
+    private async Task SendNotificacion(string idusuario, string mensaje)
+    {
+        //Llama a Send de la clase notis, el cual es un context de la clase NotificacionesHub.
+        //Contiene la hora y la fecha de cuando se creó la incidencia
+        await Notis.send(idusuario, $"{mensaje} | {DateTime.Now.Date.ToString().Substring(0,7)} | {DateTime.Now.Hour}:{DateTime.Now.Minute}");
+    }
+
+    string Nombre(CPMUser user)
+    {
+        return user?.Nombre ?? "";
+    }
+
+    private async Task<IEnumerable<CPMUser>> Search2(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstUsers;
+
+        return lstUsers.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        //_ApplicationDbContext.Entry(incidencia).Reload();
+    }
+
+    // private Proyecto ObtenerProyectoPorId(int id)
+    // {
+    //     return _ApplicationDbContext.Proyectos.FirstOrDefault(p => p.Id == id);
+    // }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                // Verificar si la incidencia ya existe en la base de datos
+                bool incidenciaExistente = incidencia.Id != 0 && incidencia.Id != null;
+
+                // Actualizar o agregar la incidencia según sea necesario
+                if (incidenciaExistente)
+                {
+                    await ActualizarIncidencia();
+                }
+                else
+                {
+                    await AgregarIncidencia();
+                }
+
+                await UploadFile();
+
+
+                var dialogData = new DialogData
+                    {
+                        Incidencia = incidencia,
+                        Documento = doc
+                    };
+                if (incidencia.UsuarioAsignado != null)
+                {
+                    // await SendMail.SendMailVoid("Asignación incidencia", incidencia.UsuarioAsignado.Email, "Se le ha asignado una nueva incidencia (" + incidencia.Nombre + ")");
+                }
+
+                ComponenteFinalizado(incidencia);
+
+                MudDialog.Close(DialogResult.Ok(dialogData));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+
+            }
+
+            //Método para generar una rama en Github, invitando al programador por si no está también en el repositorio
+            try
+            {
+                if (proyecto.OwnerRepositorioGithub != null)
+                {
+                    var token = proyecto.OwnerRepositorioGithub.TokenGitHub; // NOTA: Token de GitHub
+                    var owner = proyecto.OwnerRepositorioGithub.UsuarioGitHub; // NOTA: Nombre del propietario del repositorio
+                    var repo = proyecto.NombreRepositorioGitHub; // NOTA: Nombre del repositorio
+                    var guest = incidencia.UsuarioAsignado.UsuarioGitHub; // NOTA: Nombre del programador asignado
+                    var branchName = incidencia.Nombre; // NOTA: Nombre de la nueva rama, en este caso es el nombre de la incidencia. Sin espacio en blanco
+
+                    using (var client = new HttpClient())
+                    {
+                        client.DefaultRequestHeaders.Add("User-Agent", repo);
+                        client.DefaultRequestHeaders.Add("Authorization", $"token {token}");
+
+                        // Obtén la referencia de la rama 'master'
+                        var masterRefResponse = await client.GetStringAsync($"https://api.github.com/repos/{owner}/{repo}/git/refs/heads/master");
+                        var masterRefSha = JObject.Parse(masterRefResponse)["object"]["sha"].ToString();
+
+                        // Crea una nueva referencia de rama apuntando al último commit
+                        var newRefContent = $"{{\"ref\": \"refs/heads/{branchName}\", \"sha\": \"{masterRefSha}\"}}";
+                        var newRefResponse = await client.PostAsync($"https://api.github.com/repos/{owner}/{repo}/git/refs", new StringContent(newRefContent, Encoding.UTF8, "application/json"));
+
+                        //Crea una invitación al usuario que se quiere unir
+                        var url = ($"https://api.github.com/repos/{owner}/{repo}/collaborators/{guest}");
+                        var content = new StringContent(JsonConvert.SerializeObject(new { permission = "push" }), Encoding.UTF8, "application/json");
+                        var response = await client.PutAsync(url, content);
+                    }
+
+                    Console.WriteLine("La rama ha sido creada");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Se produjo un error: {ex.Message}");
+
+            }
+        }
+
+
+    }
+
+    public class DialogData
+    {
+        public Incidencia Incidencia { get; set; }
+        public DocumentoIncidencia Documento { get; set; }
+    }
+
+    private async Task ActualizarIncidencia()
+    {
+        proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == incidencia.Proyecto.Id);
+
+        if (proyecto != null)
+        {
+            incidencia.Proyecto = proyecto;
+            if (EstadoAnt != incidencia.EstadoIncidencia.Nombre.ToUpper())
+            {
+                if (incidencia.EstadoIncidencia.CierraIncidencia)
+                {
+                    incidencia.FechaCerrada = DateTime.Now;
+                }
+                else if (incidencia.EstadoIncidencia.Nombre.ToUpper() != "VERIFICADO POR CLIENTE")
+                {
+                    incidencia.FechaCerrada = null;
+                }
+            }
+           
+           
+            if (panelInformacion)
+            {
+                incidencia.Informacion = await QuillHtml.GetHTML();
+            }
+
+
+            _ApplicationDbContext.Incidencias.Update(incidencia);
+            //Se guardan los cambios
+            await _ApplicationDbContext.SaveChangesAsync();
+            //Se envia la notificacion
+            SendNotificacion(id, $"(Updated) / Incidencia Asignada : {incidencia.Nombre}");
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+            return;
+        }
+    }
+
+    private async Task AgregarIncidencia()
+    {
+        if (!string.IsNullOrEmpty(incidencia.Nombre))
+        {
+            proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == proyecto.Id);
+
+            if (proyecto != null)
+            {
+                incidencia.Proyecto = proyecto;
+                if (incidencia.EstadoIncidencia.CierraIncidencia)
+                {
+                    incidencia.FechaCerrada = DateTime.Now;
+                }
+                else
+                {
+                    incidencia.FechaCerrada = null;
+                }
+            }
+            else
+            {
+                await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                return;
+            }
+            if (incidenciapadre != null)
+            {
+                incidencia.Padre = incidenciapadre;
+                if (incidenciapadre.Hijos == null)
+                {
+                    incidenciapadre.Hijos = new List<Incidencia>();
+                }
+                incidenciapadre.Hijos.Add(incidencia);
+                _ApplicationDbContext.Incidencias.Update(incidenciapadre);
+            }
+
+            if (panelInformacion)
+            {
+
+                incidencia.Informacion = await QuillHtml.GetHTML();
+            }
+
+            GuardarIncidenciasHijas();
+
+            _ApplicationDbContext.Incidencias.Add(incidencia);
+
+            if (incidencia.UsuarioAsignado != null)
+            {
+                id = incidencia.UsuarioAsignado.Id;
+
+
+                SendNotificacion(id, $"Incidencia Asignada : {incidencia.Nombre}");
+
+                _ApplicationDbContext.Notificaciones.Add(await MakeNotificacion(id, proyecto.Nombre, incidencia.Nombre, false, $"Proyectos/{proyecto.Id}", proyecto.Id, false));
+
+            }
+
+         
+            //Se obtiene el id del usuario asignado a la incidencia. Para ello obtenemos el email del usuario donde el nombre del usuario sea igual al nombre de usuario asignado a la incidencia
+           
+
+
+            //Añade la incidencia a la base de datos
+           
+            //LLama a la funcion SendNotificacion, la cual explicamos que llamaba a Send() de la clase Notis.
+            //Se envia la notificacion, al usuario cual id se haya obtenido
+            
+            //Añade la notificacion a la base de datos. Ademas, crea la notificacion
+
+         
+
+            // Fecha: {DateTime.Now.Date.Day + "/" + DateTime.Now.Date.Month + "/" + DateTime.Now.Date.Year} | {DateTime.Now.Hour}:{DateTime.Now.Minute}"
+
+
+            //Guarda los cambios
+            await _ApplicationDbContext.SaveChangesAsync();
+        }
+        else
+        {
+            await DialogService.ShowMessageBox("Error", "El nombre de la incidencia es obligatorio");
+            return;
+        }
+    }
+
+ 
+    //Funcion que crea la notificacion y le asigna los parametros recibidos en la funcion
+    private async Task<Notificacion> MakeNotificacion(string iduser, string titulo, string mensaje, bool leida,string link,int index, bool eliminada)
+    {
+        //Se crea la notificacion
+        Notificacion notificacion = new();
+        //Se añaden cada atributo necesario a la notificacion
+        //Se obtiene el usuario y se establece en la notificacion
+        notificacion.IDUsuario = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == iduser);
+        notificacion.Descripcion = mensaje;
+        notificacion.Titulo = titulo;
+        notificacion.Leida = leida;
+        notificacion.Link =link;
+        notificacion.Index=index;
+        notificacion.Eliminada = eliminada;
+        //Finalmente se devuelve para su posterior insercción en la DB
+        return notificacion;
+    }
+
+    private List<DocumentoIncidencia> FiltrarDocumentos()
+    {
+        return lstDocIncidencia.Where(it => tipoDoc == null || GetExtension(it).ToLower() == tipoDoc.ToLower()).ToList();
+    }
+
+    private void ConvertirLista()
+    {
+        if (listaDocumentoPeticion != null)
+        {
+            List<DocumentoIncidencia> listaDocumentoIncidencia = listaDocumentoPeticion
+                .Select(dp => new DocumentoIncidencia
+                    {
+                        Nombre = dp.Nombre,
+                        Documento = dp.Documento,
+                        Incidencia = incidencia
+                    })
+                .ToList();
+            lstDocIncidencia.AddRange(listaDocumentoIncidencia);
+        }
+
+    }
+
+    private async Task SeleccionarArchivos(IReadOnlyList<IBrowserFile> files)
+    {
+        try
+        {
+            foreach (IBrowserFile browserFile in files)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await browserFile.OpenReadStream().CopyToAsync(memoryStream);
+                    var byteArray = memoryStream.ToArray();
+                    var fileContent = Convert.ToBase64String(byteArray);
+
+                    // Asignar contenido del archivo a la propiedad Documento de doc
+                    var nuevoDocumento = new DocumentoIncidencia
+                        {
+                            Documento = fileContent,
+                            Nombre = browserFile.Name,
+                            Incidencia = incidencia
+                        };
+                    lstDocIncidencia.Add(nuevoDocumento);
+                    file = browserFile;
+                }
+            }
+            _ApplicationDbContext.Entry(incidencia).Reload();
+            StateHasChanged();
+            Snackbar.Add("Agregado correctamente", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task UploadFile()
+    {
+        try
+        {
+            foreach (DocumentoIncidencia d in lstDocIncidencia)
+            {
+                if (d.Id != 0 && d.Id != null)
+                {
+                    _ApplicationDbContext.DocumentosIncidencias.Update(d);
+                }
+                else
+                {
+                    _ApplicationDbContext.DocumentosIncidencias.Add(d);
+                }
+            }
+
+            await _ApplicationDbContext.SaveChangesAsync();
+            Snackbar.Add("Incidencia publicada correctamente", Severity.Success);
+            _navigation.NavigateTo(_navigation.GetUriWithQueryParameter("/Proyectos/", proyecto.Id));
+
+
+
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al subir el archivo: {ex.Message}", Severity.Error);
+        }
+    }
+
+    async Task cargarEstados()
+    {
+
+        var userId = _UserManager.GetUserId((await _auth.GetAuthenticationStateAsync()).User);
+        var user = _ApplicationDbContext.Users.FirstOrDefault(u => u.Id == userId);
+
+        if (user.Rol.Name.ToUpper() == "CLIENTE")
+        {
+            lstEstadoIncidencia = _ApplicationDbContext.EstadosIncidencias.Where(it => it.EstadoCl == true).OrderBy(it => it.Nombre).ToList();
+        }
+        else
+        {
+            lstEstadoIncidencia = _ApplicationDbContext.EstadosIncidencias.OrderBy(it => it.Nombre).ToList();
+        }
+
+    }
+
+    async Task cargarDocs(int idIncidencia)
+    {
+        lstDocIncidencia = await _ApplicationDbContext.DocumentosIncidencias
+            .Where(doc => doc.Incidencia.Id == idIncidencia)
+            .ToListAsync();
+    }
+
+    private async Task cargaUsuario()
+    {
+        lstUsers = await _ApplicationDbContext.Users
+        .Where(usuario => _ApplicationDbContext.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+            .ToListAsync();
+    }
+
+    private async Task ClearFiles()
+    {
+        try
+        {
+            // Limpiar archivos y liberar recursos
+            doc = new();
+            fileContent = null;
+            file = null;
+            foreach (var f in lstDocIncidencia.ToList())
+            {
+                DeleteFile(f);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error al limpiar los archivos: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private int _selectedPage;
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+
+        StateHasChanged();
+    }
+
+    private void DeleteFile(DocumentoIncidencia documento)
+    {
+        try
+        {
+            lstDocIncidencia.Remove(documento);
+            _ApplicationDbContext.DocumentosIncidencias.Remove(documento);
+            Snackbar.Add("Elimninado correctamente", Severity.Success);
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add("Error al eliminar el archivo", Severity.Error);
+        }
+    }
+
+    private async void ShowConfirmationDialog(DocumentoIncidencia document)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar documento", "¿Seguro que quieres eliminar documento?", "Si", "No");
+
+        if (result is true)
+        {
+            DeleteFile(document);
+            StateHasChanged();
+        }
+    }
+
+    string tipoDoc;
+
+    private void GetListaExtension(List<DocumentoIncidencia> listaDocs)
+    {
+        foreach (DocumentoIncidencia d in listaDocs)
+        {
+            if (!listaExtensiones.Contains(GetExtension(d).ToLower()))
+            {
+                listaExtensiones.Add(GetExtension(d).ToLower());
+            }
+        }
+    }
+
+    void HandleTipoDocChange(ChangeEventArgs e)
+    {
+        string selectedTipoDoc = e.Value?.ToString().ToLower();
+
+        if (!string.IsNullOrEmpty(selectedTipoDoc))
+        {
+            filteredDocs = lstDocIncidencia.Where(doc => GetExtension(doc).ToLower() == selectedTipoDoc).ToList();
+            StateHasChanged();
+        }
+    }
+
+    private string GetExtension(DocumentoIncidencia documento)
+    {
+        return Path.GetExtension(documento.Nombre);
+    }
+
+    private string GetWithoutExtension(DocumentoIncidencia documento)
+    {
+        return Path.GetFileNameWithoutExtension(documento.Nombre);
+    }
+
+    private void OnInputFileChanged(InputFileChangeEventArgs e)
+    {
+        ClearDragClass();
+        var listaArchivosNuevos = e.GetMultipleFiles();
+        foreach (IBrowserFile f in listaArchivosNuevos)
+        {
+            files.Add(f);
+        }
+    }
+
+    private void SetDragClass()
+        => _dragClass = $"{DefaultDragClass} mud-border-primary";
+
+    private void ClearDragClass()
+        => _dragClass = DefaultDragClass;
+
+    private async Task ComponenteFinalizado(Incidencia incidencia)
+    {
+        await OnNewIncidencia.InvokeAsync(incidencia);
+    }
+
+    private async Task CambioIcono()
+    {
+        changeIcon = !changeIcon;
+        await onChangeIcon.InvokeAsync(changeIcon);
+        await OnGetDataIncidencia.InvokeAsync(incidencia);
+        await OnGetListaDocumentoIncidencia.InvokeAsync(lstDocIncidencia);
+    }
+
+
+    private async void CambioPanel()
+    {
+        panelInformacion = !panelInformacion;
+        if (!panelInformacion)
+        {
+            incidencia.Informacion = await QuillHtml.GetHTML(); 
+        }
+    }
+
+    //Añade en la descripcion de la incidencia el caracter "#" señalando una incidencia hija
+    private async Task addIncidenciaHija()
+    {
+        var contenidoActual = await QuillHtml.GetHTML();
+
+        var nuevoContenido = $"{contenidoActual}<p>#</p>";
+
+        await QuillHtml.LoadHTMLContent(nuevoContenido);
+    }
+
+    //Guarda y añade a la incidencia actual las incidencias hijas que se hallan escrito
+
+    private async Task GuardarIncidenciasHijas()
+    {
+        var content = await QuillHtml.GetHTML();
+        var lines = content.Split(new[] { "<p>", "</p>" }, StringSplitOptions.RemoveEmptyEntries);
+
+        incidencia.Hijos = new List<Incidencia>();
+
+        foreach (var line in lines)
+        {
+            var texto = line.Trim();
+
+            if (texto.StartsWith("#"))
+            {
+
+                var nombreIncidencia = texto.TrimStart('#').Trim();
+
+                nombreIncidencia = System.Text.RegularExpressions.Regex.Replace(nombreIncidencia, "<.*?>", "").Trim();
+
+
+                if (!string.IsNullOrEmpty(nombreIncidencia))
+                {
+                    var nuevaIncidencia = new Incidencia
+                    {
+                        Nombre = nombreIncidencia,
+                        Autor = incidencia.Autor,
+                        EstadoIncidencia = incidencia.EstadoIncidencia,
+                        Proyecto = proyecto,
+                        FechaCreacion = incidencia.FechaCreacion,
+                        Padre = incidencia
+                    };
+                    
+                    incidencia.Hijos.Add(nuevaIncidencia);
+                }
+
+            }
+        }
+    }
+
+
+}

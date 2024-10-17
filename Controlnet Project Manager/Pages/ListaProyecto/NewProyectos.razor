@@ -1,0 +1,678 @@
+﻿@using Controlnet_Project_Manager.Pages.Incidencia
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+@inject ISnackbar Snackbar;
+@inject FileService fileService;
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12" Class="d-flex">
+                    <MudImage Src="favicon.png" Height="70" Width="70" />
+                    
+                    <MudTextField @bind-Value="Proyecto.Nombre" Placeholder="Nombre" Variant="Variant.Text" Style="width: 35%; padding-left: 20px; font-size: 1.25rem"></MudTextField>
+                    
+                </MudItem>
+                <MudItem xs="6">
+                    <div style="text-align: center">
+                        <MudChip Style="width: 30%; font-size: 1.15rem" Color="Color.Primary"><b>Estado y Cliente</b></MudChip>
+                    </div>
+                    <MudDivider Style="margin:15px; height: 2px;" Light="true"></MudDivider>
+                    <MudPaper Height="200px" Elevation="1" Style="padding: 25px;">
+                        <MudStack Style="margin-right: 350px" Spacing="1">
+                            <MudText Style="text-align: center">Estado</MudText>
+                            <MudDivider Style="height: 2px"></MudDivider>
+                            <MudMenu AnchorOrigin="Origin.CenterRight" TransformOrigin="Origin.CenterLeft" MaxHeight="400">
+                                <ActivatorContent>
+                                    @if (string.IsNullOrEmpty(colorEstado))
+                                    {
+                                        <MudChip Color="Color.Primary" Style="width: 190px; display: flex; justify-content: space-between; align-items: center; padding: 5px;">
+                                            <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                                @(TextSelection(_selectedEstado, "estado"))
+                                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown"></MudIcon>
+                                            </div>
+                                        </MudChip>
+                                    }
+                                    else
+                                    {
+                                        <MudChip Style="@colorEstado">
+                                            <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                                @(TextSelection(_selectedEstado, "estado"))
+                                                <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown"></MudIcon>
+                                            </div>
+                                        </MudChip>
+                                    }
+                                </ActivatorContent>
+                                <ChildContent>
+                                    @foreach (var estado in lstEstadoProyecto)
+                                    {
+                                        var isChecked = _selectedEstado.Contains(estado.Nombre);
+                                        <MudMenuItem Style="width: 250px; height: 50px" OnClick="@(() => OnClick(estado, "estado"))">
+                                            <div>
+                                                @estado.Nombre
+                                            </div>
+                                        </MudMenuItem>
+                                    }
+                                </ChildContent>
+                            </MudMenu>
+
+                            <MudText Style="text-align: center">Cliente</MudText>
+                            <MudDivider Style="height: 2px;"></MudDivider>
+                            <MudMenu AnchorOrigin="Origin.CenterRight" TransformOrigin="Origin.CenterLeft" MaxHeight="400">
+                                <ActivatorContent>
+                                    <MudChip Color="Color.Primary" Style="width: 190px; display: flex; justify-content: space-between; align-items: center; padding: 5px;">
+                                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                            @(TextSelection(_selectedCliente, "cliente"))
+                                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown"></MudIcon>
+                                        </div>
+                                    </MudChip>
+                                </ActivatorContent>
+                                <ChildContent>
+                                    @foreach (var cliente in lstCliente)
+                                    {
+                                        var isChecked = _selectedCliente.Contains(cliente.Nombre);
+                                        <MudMenuItem Style="width: 250px; height: 50px" OnClick="@(() => OnClick(cliente, "cliente"))">
+                                            <div>
+                                                @cliente.Nombre
+                                            </div>
+                                        </MudMenuItem>
+                                    }
+                                </ChildContent>
+                            </MudMenu>
+                        </MudStack>
+
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6">
+                    <div style="text-align: center">
+                        <MudChip Style="width: 30%; font-size: 1.15rem" Color="Color.Primary"><b>Información</b></MudChip>
+                    </div>
+                    <MudDivider Style="margin:15px; height: 2px" Light="true"></MudDivider>
+                    <MudPaper Elevation="1" Style="padding: 25px">
+                        
+                        <div class="d-flex">
+                            
+                            <div>
+                                <MudNumericField @bind-Value="Proyecto.HorasEstimadas" Style="width: 70%" Label="Horas estimadas" Placeholder="Horas estimadas" Variant="Variant.Text" Margin="Margin.Dense">
+                                </MudNumericField>
+                                <div style="text-align: center">
+                                    <MudDatePicker Date="@Proyecto.FechaPrevistaContrato" Label="Fecha prevista inicio" Style="width: 70%" DateChanged="@(e => Proyecto.FechaPrevistaContrato = e.Value)" Placeholder="Fecha prevista de inicio" Variant="Variant.Text" Margin="Margin.Dense" />
+                                </div>
+                                <div style="text-align: center">
+                                    <MudDatePicker Date="@Proyecto.FechaPrevistaEntrega" Label="Fecha prevista entrega" Style="width: 70%" DateChanged="@(e => Proyecto.FechaPrevistaEntrega = e.Value)" Placeholder="Fecha prevista de entrega" Variant="Variant.Text" Margin="Margin.Dense" />
+                                </div>
+                            </div>
+                            <div>
+                                <MudTextField @bind-Value="@Proyecto.NombreRepositorioGitHub" Placeholder="Repositorio" Variant="Variant.Text" Margin="Margin.Dense" />
+                                <MudAutocomplete T="CPMUser" Placeholder="Propietario Repositorio" @bind-Value="Proyecto.OwnerRepositorioGithub" SearchFunc="@BuscarPropietarioRepo"
+                                                 ResetValueOnEmptyText="@resetValueOnEmptyText" ToStringFunc="p => p?.Nombre" CoerceText="@coerceText" CoerceValue="@coerceValue"></MudAutocomplete>
+                            </div>
+                        </div>
+                    </MudPaper>
+
+                </MudItem>
+                <!-- Tecnologias -->
+                <MudItem xs="6" Style="padding-top: 18px">
+                        <div style="text-align: center">
+                        <MudChip Style="width: 30%; font-size: 1.15rem" Color="Color.Primary"><b>Tecnologías</b></MudChip>
+                        </div>
+                    <MudDivider Style="margin:15px; height: 2px" Light="true"></MudDivider>
+                        <MudPaper Elevation="1" Style="padding: 15px;" Height="162px">
+                                @if (lstProyectoTecnologias.Count() != 0)
+                                {
+                                    @for (int i = 0; i < lstProyectoTecnologias.Count; i++)
+                                    {
+                                        var tecnologiaAsociada = lstProyectoTecnologias[i];
+                                        var estilo = $"background-color: rgba({GetR(tecnologiaAsociada.Tecnologia.Color)}, {GetG(tecnologiaAsociada.Tecnologia.Color)}, {GetB(tecnologiaAsociada.Tecnologia.Color)}, 0.5)";
+                                        var isMouseOver = mouseOverState[i];
+                                        var icon = isMouseOver ? Icons.Material.Filled.Clear : string.Empty;
+
+                                        var currentIndex = i; // Crear una copia local del índice
+
+                                        <MudChip Style="@estilo"
+                                                 OnClick="@(() => DeleteTecnologia(tecnologiaAsociada))"
+                                                 Icon="@icon"
+                                                 IconColor="Color.Error"
+                                                 @onmouseover="@(() => ToggleIcon(currentIndex, true))"
+                                                 @onmouseout="@(() => ToggleIcon(currentIndex, false))">
+                                            @tecnologiaAsociada.Tecnologia.Nombre
+                                        </MudChip>
+                                    }
+                                }
+                                <MudChip Color="Color.Primary" OnClick="@ToggleOpen" Icon="@Icons.Material.Filled.Add" IconColor="Color.Success">Añadir Tecnología</MudChip>
+                            </MudPaper>
+                            <MudPopover Open="_isOpen" Fixed="true" Class="px-4 pt-4" AnchorOrigin="Origin.CenterLeft" TransformOrigin="Origin.TopLeft">
+
+                                <MudPaper Elevation="1" MaxWidth="500px">
+                                    @foreach (var tecnologia in lstTecnologias)
+                                    {
+                                        if (lstProyectoTecnologias.FirstOrDefault(p => p.Tecnologia.Equals(tecnologia)) == null)
+                                        {
+                                            var estilo = $"background-color: rgba({GetR(tecnologia.Color)}, {GetG(tecnologia.Color)}, {GetB(tecnologia.Color)}, 0.5)";
+                                            <MudChip OnClick="@(() => AddTecnologia(tecnologia))" Style="@estilo">@tecnologia.Nombre</MudChip>
+                                        }   
+                                    }
+                            </MudPaper>
+                            <br />
+                            <MudButton OnClick="@ToggleOpen" Class="ml-auto mr-n3 mb-1" Color="Color.Error">Cerrar</MudButton>
+                        
+                        </MudPopover>
+                        <br />
+                    
+                </MudItem>
+                <!-- Documentación -->
+                <MudItem xs="6" Style="margin-top:5px">
+                    <div class="d-flex align-items-center justify-content-center" style="position: relative;">
+                        <div class="d-flex justify-content-center" style="flex-grow: 1;">
+                            <MudChip Style="font-size: 1.15rem; width: 30%" Color="Color.Primary"><b>Documentos</b></MudChip>
+                        </div>
+                        <div style="position: absolute;right: 0; left: 400px;">
+                            <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="SeleccionarArchivos">
+
+                                <ButtonTemplate>
+                                    <MudFab HtmlTag="label"
+                                            Color="Color.Primary"
+                                            Size="Size.Small"
+                                            StartIcon="@Icons.Material.Filled.CloudUpload"
+                                            for="@context">
+                                        Subir archivos
+                                    </MudFab>
+                                </ButtonTemplate>
+                            </MudFileUpload>
+                        </div>
+                    </div>
+                    
+
+                    <MudDivider Style="margin:15px; height: 2px;" Light="true"></MudDivider>
+                        <MudDataGrid @ref="docGrid" T="DocumentoProyecto" Items="lstDocProyectos" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" RowsPerPage="2" CurrentPage="@_selectedPage">
+                            <ToolBarContent>
+                            </ToolBarContent>
+                            <Columns>
+                                <PropertyColumn Property="x => GetWithoutExtension(x)" title="Nombre"></PropertyColumn>
+                                <PropertyColumn Property="x => GetExtension(x)" title="Tipo Documento"></PropertyColumn>
+                                <TemplateColumn>
+                                    <CellTemplate>
+                                        <MudTooltip Text="Descargar">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" Color="Color.Primary" OnClick="@(() => { DescargarArchivo(context.Item.Id, context.Item.Nombre); })"></MudIconButton>
+                                        </MudTooltip>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                                <TemplateColumn>
+                                    <CellTemplate>
+                                        <MudTooltip Text="Eliminar">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" OnClick="@(() => ShowConfirmationDialog(context.Item))"></MudIconButton>
+                                        </MudTooltip>
+                                    </CellTemplate>
+                                </TemplateColumn>
+                            </Columns>
+                            <PagerContent>
+                                <MudPagination SelectedChanged="PageChanged" Count="@(((docGrid?.GetFilteredItemsCount() ?? 0) + (docGrid?.RowsPerPage ?? 0) - 1) / (docGrid?.RowsPerPage ?? 1))"
+                                               Class="pa-4" />
+                            </PagerContent>
+                        </MudDataGrid>
+                    
+                    
+
+                    
+                </MudItem>
+                <!-- Observaciones -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Proyecto.Observaciones" Lines="6" Variant="Variant.Outlined" Label="Observaciones"></MudTextField>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Proyecto Proyecto { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<Estado> lstEstadoProyecto = new List<Estado>();
+    List<Cliente> lstCliente = new();
+    List<Tecnologia> lstTecnologias = new();
+    List<Tecnologia> lstTecnologiasSeleccionadas = new();
+    List<ProyectoTecnologia> lstProyectoTecnologias = new();
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+    List<CPMUser> PropietariosRepo = new List<CPMUser>();
+    List<DocumentoProyecto> lstDocProyectos { get; set; } = new List<DocumentoProyecto>();
+    private IBrowserFile file;
+    MudDataGrid<DocumentoProyecto> docGrid;
+    private int _selectedPage;
+    public bool _isOpen;
+    private string icon = string.Empty;
+    private bool isMouseOver = false;
+    IList<IBrowserFile> files = new List<IBrowserFile>();
+    private List<bool> mouseOverState = new List<bool>();
+    private string _selectedEstado = "";
+    private string _selectedCliente = "";
+    private string colorEstado = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (Proyecto == null)
+        {
+            Proyecto = new Proyecto();
+            Proyecto.FechaPrevistaContrato = DateTime.Now; // Configura FechaPrevistaContrato con la fecha y hora actual
+            Proyecto.FechaPrevistaEntrega = DateTime.Now; // Configura FechaPrevistaEntrega con la fecha y hora actual
+        }
+    }
+
+    // Método para obtener el componente rojo (R) de un color hexadecimal
+    int GetR(string colorHex) => Convert.ToInt32(colorHex.Substring(1, 2), 16);
+
+    // Método para obtener el componente verde (G) de un color hexadecimal
+    int GetG(string colorHex) => Convert.ToInt32(colorHex.Substring(3, 2), 16);
+
+    // Método para obtener el componente azul (B) de un color hexadecimal
+    int GetB(string colorHex) => Convert.ToInt32(colorHex.Substring(5, 2), 16);
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+
+        StateHasChanged();
+    }
+
+    private async void ShowConfirmationDialog(DocumentoProyecto documento)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar documento", "¿Está seguro de que desea eliminar este documento?", "Sí", "No");
+        if (result is true)
+        {
+            DeleteFile(documento);
+            StateHasChanged();
+        }
+    }
+
+    private void ToggleIcon(int index, bool value)
+    {
+        if (index < mouseOverState.Count)
+        {
+            mouseOverState[index] = value;
+        }
+        else
+        {
+            while (index >= mouseOverState.Count)
+            {
+                mouseOverState.Add(false);
+            }
+            mouseOverState[index] = value;
+        }
+        StateHasChanged();
+    }
+
+    private void AddTecnologia (Tecnologia tecnologia)
+    {
+        lstProyectoTecnologias.Add(new ProyectoTecnologia { Tecnologia = tecnologia, Proyecto = Proyecto });
+        InitializeMouseOverState();
+        StateHasChanged();
+    }
+
+    private void InitializeMouseOverState()
+    {
+        mouseOverState.Clear();
+        for (int i = 0; i < lstProyectoTecnologias.Count; i++)
+        {
+            mouseOverState.Add(false);
+        }
+    }
+
+    private void OnClick(Object objeto, string tipo)
+    {
+        switch (tipo)
+        {
+            case "estado":
+                if (objeto is Estado estado)
+                {
+                    _selectedEstado = estado.Nombre;
+                    Proyecto.Estado = estado;
+                    colorEstado = $"background-color: {estado.Color}; width: 190px; display: flex; justify-content: space-between; align-items: center; padding: 5px;";
+                }
+                break;
+            case "cliente":
+                if (objeto is Cliente cliente)
+                {
+                    _selectedCliente = cliente.Nombre;
+                    Proyecto.Cliente = cliente;
+                }
+                break;
+        }
+        StateHasChanged();
+    }
+
+    private async void DeleteTecnologia (ProyectoTecnologia ProyectoTecnologia)
+    {
+        var proyectoTecnologiaAsociado = lstProyectoTecnologias.FirstOrDefault(p => p.Equals(ProyectoTecnologia));
+
+        if (proyectoTecnologiaAsociado != null && proyectoTecnologiaAsociado.Id != 0)
+        {
+            _ApplicationDbContext.ProyectosTecnologias.Remove(proyectoTecnologiaAsociado);
+            lstProyectoTecnologias.RemoveAll(t => t.Equals(ProyectoTecnologia));
+            await _ApplicationDbContext.SaveChangesAsync();
+            Snackbar.Add("Asociación de tecnología eliminada de la lista y base de datos ", Severity.Success);
+        }
+        else
+        {
+            lstProyectoTecnologias.RemoveAll(t => t.Equals(ProyectoTecnologia));
+            //Snackbar.Add("Asociación de tecnología eliminada", Severity.Success);
+        }
+
+
+    }
+
+
+    private void DeleteFile(DocumentoProyecto documento)
+    {
+        try
+        {
+
+            if (documento.Proyecto != null && documento.Id != 0 && documento.Proyecto.Id != null)
+            {
+                lstDocProyectos.Remove(documento);
+                _ApplicationDbContext.DocumentosProyectos.Remove(documento);
+                _ApplicationDbContext.SaveChangesAsync(); 
+                Snackbar.Add("Documento eliminado correctamente de la lista y base de datos", Severity.Success);
+            }
+            else
+            {
+                lstDocProyectos.Remove(documento);
+                Snackbar.Add("Documento eliminado correctamente de la lista", Severity.Success);
+            }
+
+        } catch (Exception e)
+        {
+            Snackbar.Add($"Error al eliminar el documento: {e.Message}", Severity.Error);
+        }
+    }
+
+    public void ToggleOpen()
+    {
+        if (_isOpen)
+            _isOpen = false;
+        else
+            _isOpen = true;
+    }
+
+
+    private string GetExtension(DocumentoProyecto documento)
+    {
+        return Path.GetExtension(documento.Nombre);
+    }
+
+    private string GetWithoutExtension(DocumentoProyecto documento)
+    {
+        return Path.GetFileNameWithoutExtension(documento.Nombre);
+    }
+
+    private async Task SeleccionarArchivos(IReadOnlyList<IBrowserFile> files)
+    {
+        try
+        {
+            foreach (var browserFile in files)
+            {
+                using (var memoryStream = new MemoryStream())
+                {
+                    await browserFile.OpenReadStream().CopyToAsync(memoryStream);
+                    var byteArray = memoryStream.ToArray();
+                    var fileContent = Convert.ToBase64String(byteArray);
+
+                    var nuevoDocumento = new DocumentoProyecto
+                    {
+                            Documento = fileContent,
+                            Nombre = browserFile.Name,
+                            Proyecto = Proyecto
+                    };
+                    lstDocProyectos.Add(nuevoDocumento);
+                    file = browserFile;
+                }
+            }
+            _ApplicationDbContext.Entry(Proyecto).Reload();
+            StateHasChanged();
+            Snackbar.Add("Archivo agregado correctamente", Severity.Success);
+
+        } catch (Exception e)
+        {
+            Snackbar.Add($"Error al subir archivo: {e.Message}", Severity.Error);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            lstCliente = _ApplicationDbContext.Clientes.ToList<Cliente>();
+
+            await CargarTecnologias();
+            await CargarEstados();
+            await cargarUsuariosGit();
+            await CargarDocumentos();
+            await InitializeProyecto();
+            InitializeMouseOverState();
+            InitializeEstadoCliente();
+            StateHasChanged();
+
+        }  
+    }
+
+    private async Task InitializeProyecto()
+    {
+        if (Proyecto.Id != 0)
+        {
+            Proyecto = await _ApplicationDbContext.Proyectos.Include(it => it.Cliente).Include(it => it.Estado).Include(it => it.OwnerRepositorioGithub).FirstOrDefaultAsync(it => it.Id == Proyecto.Id);
+
+        }
+    }
+
+    private void InitializeEstadoCliente()
+    {
+        if (Proyecto.Id != 0)
+        {
+            if (Proyecto.Estado != null)
+            {
+                _selectedEstado = Proyecto.Estado.Nombre;
+                colorEstado = $"background-color: {Proyecto.Estado.Color}; width: 190px; display: flex; justify-content: space-between; align-items: center; padding: 5px;";
+            }
+            if (Proyecto.Cliente != null)
+            {
+                _selectedCliente = Proyecto.Cliente.Nombre;
+            }
+        }
+
+    }
+
+    private async Task CargarDocumentos()
+    {
+        if (Proyecto.Id != 0)
+        {
+            lstDocProyectos = await _ApplicationDbContext.DocumentosProyectos.Where(p => p.Proyecto.Id == Proyecto.Id).ToListAsync();
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Proyecto).Reload();
+    }
+
+    private async Task DescargarArchivo(int idArchivo, string nombreArchivo)
+    {
+        await fileService.DescargarArchivo(lstDocProyectos, idArchivo, nombreArchivo);
+    }
+
+    private async Task Submit() 
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (Proyecto.Id != 0 && Proyecto != null)
+                {
+
+                    _ApplicationDbContext.Proyectos.Update(Proyecto);
+
+                    if (lstDocProyectos.Any())
+                    {
+                        var listaDocs = await _ApplicationDbContext.DocumentosProyectos.Where(p => p.Proyecto.Id == Proyecto.Id).ToListAsync();
+                        foreach (var doc in lstDocProyectos)
+                        {
+                            if (listaDocs.Contains(doc))
+                            {
+                                _ApplicationDbContext.DocumentosProyectos.Update(doc);
+                            }
+                            else
+                            {
+                                _ApplicationDbContext.DocumentosProyectos.Add(doc);
+                            }
+                        }
+                    }
+                    if (lstProyectoTecnologias.Any())
+                    {
+                        var listaTecnosAsociadas = await _ApplicationDbContext.ProyectosTecnologias.Where(p => p.Proyecto.Id == Proyecto.Id).ToListAsync();
+                        foreach (var pt in lstProyectoTecnologias)
+                        {
+                            if (listaTecnosAsociadas.Contains(pt))
+                            {
+                                _ApplicationDbContext.ProyectosTecnologias.Update(pt);
+                            }
+                            else
+                            {
+                                _ApplicationDbContext.ProyectosTecnologias.Add(pt);
+                            }
+                        }
+                    }
+                    await _ApplicationDbContext.SaveChangesAsync();
+                    MudDialog.Close(DialogResult.Ok<Proyecto>(Proyecto));
+                    Snackbar.Add("Proyecto editado con éxito", Severity.Success);
+
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(Proyecto.Nombre))
+                    {
+                        await DialogService.ShowMessageBox("Error", "El nombre del proyecto es obligatorio");
+                        return;
+                    }
+                    if (Proyecto.Estado == null)
+                    {
+                        await DialogService.ShowMessageBox("Error", "El estado del proyecto es obligatorio");
+                        return;
+                    }
+
+                    if (!string.IsNullOrEmpty(Proyecto.Nombre) && !string.IsNullOrEmpty(Proyecto.Estado.Nombre))
+                    {
+                        _ApplicationDbContext.Proyectos.Add(Proyecto);
+
+                        if (lstDocProyectos.Any())
+                        {
+                            foreach (var doc in lstDocProyectos)
+                            {
+                                _ApplicationDbContext.DocumentosProyectos.Add(doc);
+                            }
+                        }
+                        if (lstProyectoTecnologias.Any())
+                        {
+                            foreach (var pt in lstProyectoTecnologias)
+                            {
+                                _ApplicationDbContext.ProyectosTecnologias.Add(pt);
+                            }
+                        }
+                        await _ApplicationDbContext.SaveChangesAsync();
+                        MudDialog.Close(DialogResult.Ok<Proyecto>(Proyecto));
+                        Snackbar.Add("Proyecto creado con éxito", Severity.Success);
+
+                    }
+
+                }
+
+            }
+            catch (Exception e)
+            {
+                await DialogService.ShowMessageBox("Error", e.Message);
+            }
+        }
+    }
+
+    private string TextSelection(string valor, string tipo)
+    {
+        switch (tipo)
+        {
+            case "estado":
+                if (valor == "")
+                {
+                    return "Seleccionar estado";
+                }
+                else
+                {
+                    return valor;
+                }
+            case "cliente":
+                if (valor == "")
+                {
+                    return "Seleccionar cliente";
+                }
+                else
+                {
+                    return valor;
+                }
+            default:
+                return "";
+        }
+        StateHasChanged();
+
+    }
+
+    private async Task<IEnumerable<CPMUser>> BuscarPropietarioRepo(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return PropietariosRepo;
+
+        return PropietariosRepo.Where(p => p.UsuarioGitHub.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private async Task CargarEstados()
+    {
+        lstEstadoProyecto = await _ApplicationDbContext.Estados.OrderBy(estado => estado.Nombre).ToListAsync();
+    }
+
+    private async Task CargarTecnologias()
+    {
+        lstTecnologias = await _ApplicationDbContext.Tecnologias.Where(p => p.EstaActivo).ToListAsync();
+        if (Proyecto.Id != 0 && Proyecto != null)
+        {
+            lstProyectoTecnologias = await _ApplicationDbContext.ProyectosTecnologias.Where(p => p.Proyecto.Id == Proyecto.Id).ToListAsync();
+        }
+        
+    }
+
+    async Task cargarUsuariosGit() => PropietariosRepo = await _ApplicationDbContext.Users.Where(it => it.UsuarioGitHub != null).ToListAsync();
+}

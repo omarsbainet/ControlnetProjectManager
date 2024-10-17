@@ -1,0 +1,97 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudGrid>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Cliente.Nombre" Label="Nombre" Variant="Variant.Outlined" Margin="Margin.Dense" Required="true" RequiredError="Debe indicar nombre" />
+                    <MudTextField @bind-Value="Cliente.PaginaWeb" Label="Página Web" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="Cliente.NombreContacto" Label="Nombre Contacto" Variant="Variant.Outlined" Margin="Margin.Dense"/>
+                    <MudTextField @bind-Value="Cliente.Telefono" Label="Teléfono" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                    <MudTextField @bind-Value="Cliente.Correo" Label="Correo electrónico" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit">Guardar</MudButton>
+
+    </DialogActions>
+</MudDialog>
+
+@code {
+    //Variables y Parametros
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Cliente Cliente { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        //Comprobamos si Cliente es nulo Si es nula, se crea una nueva instancia
+        if (Cliente == null)
+        {
+            Cliente = new Cliente();
+        }
+
+        if (Cliente.Id != 0 && Cliente.Id != null)
+        {
+            //Cargamos con los datos que corresponde a la id
+            Cliente = _ApplicationDbContext.Clientes.FirstOrDefault(u => u.Id == Cliente.Id);
+        }
+
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(Cliente).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (success)
+        {
+            if (string.IsNullOrEmpty(Cliente.Nombre))
+            {
+                await DialogService.ShowMessageBox("Error", "El nombre del cliente es obligatorio");
+                return;
+            }
+
+            if (Cliente.Id != 0 && Cliente.Id != null)
+            {
+                _ApplicationDbContext.Clientes.Update(Cliente);
+            }
+            else
+            {
+                _ApplicationDbContext.Clientes.Add(Cliente);
+            }
+
+            _ApplicationDbContext.SaveChanges();
+
+            MudDialog.Close(DialogResult.Ok<Cliente>(Cliente));
+        }
+    }
+}

@@ -1,0 +1,1503 @@
+﻿@using MudBlazor.Utilities
+@inherits LayoutComponentBase
+@inject IHttpContextAccessor _httpContextAccessor
+@inject UserManager<CPMUser> _UserManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory;
+@inject CRUD Crud
+@inject ApplicationDbContext _ApplicationDbContext
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@using Controlnet_Project_Manager.Shared
+@inject IJSRuntime JSRuntime
+@inject ISnackbar snackbar;
+@using Microsoft.JSInterop
+@using Microsoft.Identity
+@using Controlnet_Project_Manager.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using System.Reflection;
+@using System.Media;
+@using System.ComponentModel;
+@inject MyCustomTheme tema;
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject ProtectedLocalStorage localStorage
+
+
+
+<style>
+    .mudimage-container {
+        width: 45px;
+        height: 45px; 
+        overflow: hidden;
+        border-radius: 50%;
+    }
+
+        .mudimage-container img {
+            width: 100%; /* Para asegurar que la imagen ocupe el 100% del contenedor */
+            height: 100%; /* Para asegurar que la imagen ocupe el 100% del contenedor */
+            object-fit: cover; /* Ajusta la imagen para que cubra todo el contenedor */
+        }
+
+    .mud-menu-custom {
+        width: 300px;
+    }
+    .fondoModoOcuro{
+        background-color:black;
+    }
+</style>
+
+<MudThemeProvider IsDarkMode="@ModoNocturno" Theme="MyCustomTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<CascadingValue Value="this">
+<MudLayout >
+    <PageTitle>Controlnet Project Manager</PageTitle>
+    @*
+    <MudAppBar Elevation="1" Dense="true" Style="z-index: 100">
+    <AppBar></AppBar>
+    </MudAppBar>
+    *@
+    <audio id="sound" src="
+notificacion.wav"></audio>
+    <MudDrawerContainer>
+            <MudDrawer @ref="mudDrawerGlobal" Variant="DrawerVariant.Mini" ClipMode="DrawerClipMode.Always" @bind-Open="getBindOpen" @onmouseenter="expansionMudDrawer" @onmouseleave="verificarMudDrawer" Anchor="Anchor.Start" Fixed="false" Elevation="1" Class="sidebar" Style="@(esModoNocturno() ? $"background-color: #212121; overflow-x:hidden;position: fixed; z-index: 1000;" : $"background-color: #009EE0; overflow-x:hidden;position: fixed; z-index: 1000;")">
+            <div style="display: flex; flex-direction: column; justify-content: center; align-items: center;" >
+                @if (getBindOpen)
+                {
+                        <MudIconButton Icon="@( bindOpen? Icons.Material.Filled.MenuOpen : Icons.Material.Filled.Menu)" OnClick="@changeBellState" Color="Color.Secondary" Style="@(esModoNocturno() ? $"background-color: #212121; margin-right: 200px;" : $"background-color: #009EE0; margin-right: 200px;")"></MudIconButton>
+                }
+                <MudDrawerHeader LinkToIndex="true">
+                    <div class="mudimage-container">
+                        <MudImage Alt="CPM" Src="favicon.png" Height="45" Width="45" Class=""></MudImage>
+                    </div>
+                </MudDrawerHeader>
+            </div>
+            <div style="display:flex;justify-content:center;align-content:center;align-items:center">
+                @* usuario logueado *@
+                <AuthorizeView>
+                    <!--Si la pestaña esta en modo fija, se mostrará lo siguiente:-->
+
+                        @if (getBindOpen)
+                        {
+
+                            <!--Si esta abierto, aparecera el perfil-->
+                            <div style="margin-left:25px">
+                                <a href="/account/manage">
+                                    @if (!string.IsNullOrEmpty(imagenPerfil))
+                                    {
+                                        <MudAvatar Class="object" Size="Size.Medium" Color="Color.Secondary" Style="color: #009ee0" Variant="Variant.Filled">
+                                            <img src="data:image;base64,@imagenPerfil" alt="Foto de perfil" style="width: 100%; height: 100%; object-fit: cover;" />
+                                        </MudAvatar>
+                                        @* <img src="data:image;base64,@imagenPerfil" alt="Foto de perfil"/> *@ 
+
+                                    } else {
+                                        <MudAvatar Size="Size.Medium" Color="Color.Secondary" Style="color: #009ee0" Variant="Variant.Filled">
+                                            <b>@nombre</b>
+                                        </MudAvatar>
+                                    }
+                                    
+                                </a>
+                            </div>
+
+                            /*Si el numero de notificaciones es mayor a uno, es decir, hay notificaciones, y hay una o mas sin leer, se mostrara un badge
+                            con el numero de notificaciones
+                            */
+                            if (ListaNotificaciones.Count >= 1)
+                            {
+                                if (numeroNoLeidas >= 1)
+                                {
+                                    <MudBadge Style="margin-top:20px;" Content="numeroNoLeidas" Overlap="true" Color="@(esModoNocturno() ? Color.Tertiary : Color.Tertiary)">
+                                        <MudMenu @ref="mudmenuNotis" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.BottomRight" MaxHeight="400" LockScroll="true" Color=Color.Primary Label="Mis Notificaciones">
+                                            <ActivatorContent>
+                                                <MudIcon Style="color:white" Size="Size.Medium" Icon="@Icons.Material.Filled.Notifications"></MudIcon>
+                                            </ActivatorContent>
+                                            <ChildContent>
+                                            <div style="display:flex;height:30px;align-content:center;justify-content:space-between;align-items:center">
+                                                    <MudText Style="font-size:14px;margin-left:10px">
+                                                        <b> Notificaciones: @ListaNotificaciones.Count() </b>
+                                                    </MudText>
+                                                    <MudButton Color="Color.Default" Style="text-align:right;height:20px" OnClick="() => changeAllLeidaStatus(ListaNotificaciones)" Variant="Variant.Text">
+                                                        <MudText Style="font-size:13px">Leer todo</MudText>
+                                                    </MudButton>
+                                            </div>
+                                                <MudDivider Light="true"></MudDivider>
+                                                <!--Se muestran primero las notificaciones que no estan leidas-->
+                                                @foreach (var noti in ListaNotificaciones.OrderBy(n => n.Leida))
+                                                {
+                                                    //Al pulsar sobre la notificacion estará cambiara su estado de leida a true
+                                                    <MudMenuItem AutoClose=false OnClick="() => changeLeidaStatus(noti)" Style=@StyleNoti(noti)>
+                                                        <div style="width:100%;display:flex;justify-content:space-between;flex-flow:column;align-items:start">
+                                                            <!-- Al pinchar sbre su informacion, nos llevará al link de la incidencia creada. A la pagina del proyecro de la incidencia -->
+                                                            <div style="display:flex;width:100%;height:30px;justify-content:space-between">
+                                                                <a href="@noti.Link"><b style="font-size:14px;color:black"> @noti.Titulo </b> </a>
+                                                                <MudIconButton Variant="Variant.Text" Size="Size.Medium" Style="color:black;margin-left:15px" OnClick=" ()=> setNotiEliminada(noti.Id)">X</MudIconButton>
+                                                            </div>
+
+                                                            <div>
+                                                                <p style="font-size:14px;color:black"> @SetShortDesc(noti.Descripcion) </p>
+                                                            </div>
+                                                        </div>
+                                                    </MudMenuItem>
+                                                    <MudDivider Light="true"></MudDivider>
+                                               }
+                                            </ChildContent>
+                                        </MudMenu>
+                                    </MudBadge>
+                                }
+                                //Si no hay leidas, simplemete no aparacerá el Badge que indica la cantidad de notificaciones, sin embargo se podrá acceder a ver el registro de notificacioness
+                                else
+                                {
+                                    //Aqui, como no hay leidas no aparecerá el boton de Marcar como leidas
+                                    <MudMenu @ref="mudmenuNotis" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.BottomRight" MaxHeight="400" LockScroll="true" Color=Color.Primary Label="Mis Notificaciones">
+                                        <ActivatorContent>
+                                            <MudIcon Style="color:white" Size="Size.Medium" Icon="@Icons.Material.Filled.Notifications"></MudIcon>
+                                        </ActivatorContent>
+                                        <ChildContent>
+                                        <div style="display:flex;height:30px;align-content:center;align-items:center;">
+                                                <MudText Style="font-size:14px;margin-left:10px">
+                                                    <b> Notificaciones: @ListaNotificaciones.Count() </b>
+                                                </MudText>
+                                            </div>
+                                            <MudDivider Light="true"></MudDivider>
+                                            
+                                            @foreach (var noti in ListaNotificaciones)
+                                            {
+                                                //Para cada notificacion, se crea un item. Dependiendo de su estado, se mostrará de una manera u otra (style)
+                                                <MudMenuItem AutoClose=false Style=@StyleNoti(noti)>
+                                                    <div style="width:100%;display:flex;justify-content:space-between;flex-flow:column;align-items:start">
+                                                           <!-- Al pinchar sbre su informacion, nos llevará al link de la incidencia creada. A la pagina del proyecro de la incidencia -->
+                                                        <div style="display:flex;width:100%;height:30px;justify-content:space-between">
+                                                            <a href="@noti.Link"><b style="font-size:14px;color:black"> @noti.Titulo </b> </a>
+                                                            <MudIconButton Variant="Variant.Text" Size="Size.Medium" Style="color:black;margin-left:15px" OnClick=" ()=> setNotiEliminada(noti.Id)">X</MudIconButton>
+                                                        </div>
+                                                        <div>
+                                                            <p style="font-size:14px"> @SetShortDesc(noti.Descripcion) </p>
+                                                        </div>
+                                                    </div>
+                                                    <!-- Al hacer click en este boton, pondrmos el estado de la notificacion a eliminada, el cual no la elimina de la base de datos pero ya no aparecerá mas en la lista-->
+                                                </MudMenuItem>
+                                                <MudDivider Light="true"></MudDivider>
+                                            }
+                                        </ChildContent>
+                                    </MudMenu>
+                                }
+                            }
+                            //Si no hay ninguna notificacion (sin leer, y sin que se muestren) aparecerá un solo item enseñando que no hay notificaciones
+                            else
+                            {
+                            <MudMenu @ref="mudmenuNotis" ActivationEvent="MouseEvent.MouseOver" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.BottomRight" MaxHeight="400" LockScroll="true" Color=Color.Primary Label="Mis Notificaciones">
+                                    <ActivatorContent>
+                                        <MudIcon Style="color:white" Size="Size.Medium" Icon="@Icons.Material.Filled.Notifications"></MudIcon>
+                                    </ActivatorContent>
+                                    <ChildContent>
+                                        <MudMenuItem>
+                                            <MudText>No tienes ninguna notificacion</MudText>
+                                        </MudMenuItem>
+                                    </ChildContent>
+                                </MudMenu>
+                            }
+
+                        }
+                        else
+                        {
+                            //Si no esta abierto:
+
+                            //Si hay alguna notificacion sin leer, se mostrará la cantidad de notificaciones encima del perfil
+
+                            if (numeroNoLeidas >= 1)
+                            {
+                            <MudBadge Style="margin-top:20px;" Content="numeroNoLeidas" Overlap="true" Color="Color.Tertiary">
+                                <div>
+                                    <a href="/account/manage">
+                                        <MudAvatar Size="Size.Medium" Color="Color.Secondary" Style="color: #009ee0" Variant="Variant.Filled">
+                                            <b>@nombre</b>
+                                        </MudAvatar>
+                                    </a>
+                                </div>
+                            </MudBadge>
+
+                            }
+
+                            //Si no hay notificaciones sin leer, no aparecerá la cantidad, simplemente el avatar de la persona
+
+                            else
+                            {
+                            <a href="/account/manage">
+                                <MudAvatar Size="Size.Medium" Color="Color.Secondary" Style="color: #009ee0" Variant="Variant.Filled">
+                                    <b>@nombre</b>
+                                </MudAvatar>
+                            </a>
+                            }
+                            }
+                        </AuthorizeView>
+                    </div>
+
+                    @* bloque de items *@
+
+
+
+                <MudNavMenu Class="mud-width-full mt-3" Color="Color.Secondary" Style="@(esModoNocturno() ? $"background-color: #212121;" : $"background-color: #009EE0;")">
+                        @*carga apartados del menu sencillos*@
+                        @foreach (var menuItem in _menuItems.Where(x => x.grupotitulo?.Length == 0 && x.activo && x.nombre != "Proyectos").OrderBy(menuItem => menuItem.id))
+                        {
+
+                            if (ListaMenusRol.Any(m => m.IdMenu == menuItem.id))
+                            {
+                                <MudNavLink Icon=@(typeof(Icons.Material.Filled).GetField(menuItem.icono)?.GetValue(null) as string)
+                                            Disabled=false
+                                            IconColor="Color.Secondary"
+                                            Href=@menuItem.enlace>
+                                    <b style="color: white">@menuItem.nombre</b>
+                                </MudNavLink>
+                            }
+                        }
+                        @*carga apartados del menu con opciones desplegables*@
+                        @foreach (var menuItem in _menuItems.Where(x => x.grupotitulo?.Length > 0 && x.esgrupo == true))
+                        {
+                            @if (_menuItems.Where(x => x.grupotitulo == menuItem.grupotitulo && x.esgrupo == false && x.activo).Any())
+                            {
+                                if (ListaMenusRol.Any(mr => mr.IdMenu == menuItem.id))
+                                {
+                                    <MudNavGroup @ref="mudNavGroupConfiguracion" Title=@(menuItem.grupotitulo) IconColor="Color.Secondary" ExpandIcon="@(open ? @Icons.Material.Filled.ArrowDropDown : "")" Style="color: white;"
+                                                 Icon=@(typeof(Icons.Material.Filled).GetField(menuItem.icono)?.GetValue(null) as string) @onclick="changeOpenConfiguracion">
+                                        @foreach (var groupItem in _menuItems.Where(x => x.grupotitulo == menuItem.grupotitulo && x.esgrupo == false && x.activo))
+                                        {
+                                            if (ListaMenusRol.Any(mr => mr.IdMenu == groupItem.id))
+                                            {
+                                                <MudNavLink Icon=@(typeof(Icons.Material.Filled).GetField(groupItem.icono)?.GetValue(null) as string)
+                                                            Disabled=false
+                                                            IconColor="Color.Secondary"
+                                                            Href=@groupItem.enlace>
+                                                    <b style="color: white">@groupItem.nombre</b>
+                                                </MudNavLink>
+                                            }
+                                        }
+                                    </MudNavGroup>
+                                }
+                            }
+                        }
+
+                 
+                    
+
+                        @* bloque items proyectos *@
+                    <div Style="@(esModoNocturno() ? $"border-top: 1px solid white; border-bottom: 1px solid white; display: flex; flex-direction: column; align-items: center; background-color: #212121;" : $"border-top: 1px solid white; border-bottom: 1px solid white; display: flex; flex-direction: column; align-items: center;")">
+                            @if (getBindOpen)
+                            {
+                                @if (menuRol != null)
+                                {
+                                    <div>
+                                        <MudButton OnClick="() => NavigateToProjects()" Class="ml-4" Style="color: white; background-color: transparent; border: none; padding: 0;">
+                                            <MudText Typo="Typo.h6"><b>Proyectos</b></MudText>
+                                        </MudButton>
+                                        <MudMenu>
+                                            <ActivatorContent>
+                                                <MudIconButton Class="mt-4" Icon="@Icons.Material.Filled.FilterAlt" Size="Size.Small" Color="@GetIconColor()"></MudIconButton>
+                                            </ActivatorContent>
+                                            <ChildContent>
+                                                @foreach (var cliente in lstCliente.Select(x => x.Nombre))
+                                                {
+                                                    var isChecked = _selectedClientes.Contains(cliente);
+
+                                                    <MudMenuItem Style="width: 250px; height: 50px;">
+                                                        <div>
+                                                            <MudCheckBox T="bool" @bind-Checked=isChecked Label="@cliente" @onclick="@(() => ToggleSelection(cliente))" />
+                                                        </div>
+                                                    </MudMenuItem>
+                                                }
+                                            </ChildContent>
+                                        </MudMenu>
+
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudText Class="mt-4" Style="color: white; background-color: transparent; border: none; padding: 0;" Typo="Typo.h6"><b>Proyectos</b></MudText>
+                                }
+                                <br />
+                                @if (!isLoading)
+                                {
+                                    <div style="display: flex; align-items: center;">
+
+                                <MudBadge Origin="Origin.TopRight" Style="cursor: pointer" OnClick="ToggleCheckInStatus" Icon="@(EsEntrada? (@Icons.Material.Filled.Close) : Icons.Material.Filled.PlayArrow)" Color="@(EsEntrada ? Color.Success : Color.Error)" Overlap="true" Elevation="3">
+
+                                            <MudMenu @ref="mudMenuProyectos" AnchorOrigin="Origin.CenterRight" TransformOrigin="Origin.CenterLeft" MaxHeight="400">
+                                                <ActivatorContent>
+                                                <MudChip Color="Color.Secondary" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 200px; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 200px; display: flex; justify-content: space-between; align-items: center; padding: 5px;")">
+                                                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                                            @(TextSelection(_selectedProyecto))
+                                                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown"></MudIcon>
+                                                        </div>
+                                                    </MudChip>
+                                                </ActivatorContent>
+                                                <ChildContent>
+                                                    @foreach (var proyecto in _lstProyectos)
+                                                    {
+                                                        <MudMenuItem OnClick="() => { OnClick(proyecto.Id); }" Style="width: 250px; height: 50px;">
+                                                            <div>
+                                                                @proyecto.Nombre
+                                                            </div>
+                                                        </MudMenuItem>
+                                                    }
+                                                </ChildContent>
+                                            </MudMenu>
+
+                                        </MudBadge>
+
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div style="display: flex; align-items: center;">
+
+                                        <MudBadge Origin="Origin.TopRight" Icon="@(EsEntrada? (@Icons.Material.Filled.Close) : Icons.Material.Filled.PlayArrow)" Color="@(EsEntrada ? Color.Success : Color.Error)" Overlap="true" Elevation="3">
+
+                                            <MudMenu @ref="mudMenuProyectos" AnchorOrigin="Origin.CenterRight" TransformOrigin="Origin.CenterLeft" MaxHeight="300">
+                                                <ActivatorContent>
+                                                    <MudChip Color="Color.Secondary" Style="@($"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 200px; display: flex; justify-content: space-between; align-items: center; padding: 0px;")">
+                                                        <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                                            @(TextSelection(_selectedProyecto))
+                                                            <MudIcon Icon="@Icons.Material.Filled.ArrowDropDown"></MudIcon>
+                                                        </div>
+                                                    </MudChip>
+                                                </ActivatorContent>
+                                                <ChildContent>
+                                                    @foreach (var proyecto in _lstProyectos)
+                                                    {
+                                                        var isChecked = _selectedProyecto.Contains(proyecto.Nombre);
+
+                                                        <MudMenuItem OnClick="() => { OnClick(proyecto.Id); }" Style="width: 250px; height: 50px;">
+                                                            <div>
+                                                                @proyecto.Nombre
+                                                            </div>
+                                                        </MudMenuItem>
+                                                    }
+                                                </ChildContent>
+                                            </MudMenu>
+
+                                        </MudBadge>
+
+                                    </div>
+                                }
+
+                                <br />
+                                <div style=@estiloDivProyectos>
+
+                                    @foreach (var proyecto in _lstProyectos)
+                                    {
+                                        var countIncidencia = proyecto.Incidencias?.Count(it => it.EstadoIncidencia?.Notificar == true && it.UsuarioAsignado?.Id == usuario.Id) ?? 0;
+                                        var countDesarrollo = proyecto.Desarrollos?.Count(it => it.EstadoDesarrollo?.Notificar == true && it.UsuarioAsignado?.Id == usuario.Id) ?? 0;
+                                        var countAdminInci = proyecto.Incidencias?.Count(it => it.EstadoIncidencia?.Notificar == true);
+                                        var countAdminDesa = proyecto.Desarrollos?.Count(it => it.EstadoDesarrollo?.Notificar == true);
+                                        var totalAdmin = countAdminDesa + countAdminInci;
+                                        var total = countIncidencia + countDesarrollo;
+                                        if (menuRol != null)
+                                        {
+                                            if (totalAdmin == 0)
+                                            {
+                                                <MudNavLink Disabled="false" IconColor="Color.Secondary" OnClick="() => HandleClick(proyecto)" style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div style="display: flex; align-items: center;">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Small" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; margin-right: 15px;" : $"margin-right:15px;color: {tema.Theme.Palette.Primary.ToString()}")">
+                                                            @if (@proyecto.Cliente != null)
+                                                            {
+                                                                <b>@(proyecto.Cliente.Nombre.Substring(0, Math.Min(proyecto.Cliente.Nombre.Length, 2)))</b>
+                                                            }
+                                                            else
+                                                            {
+                                                                <b>@(proyecto.Nombre.Substring(0, Math.Min(proyecto.Nombre.Length, 2)))</b>
+                                                            }
+                                                        </MudAvatar>
+                                                        @if (@proyecto.Nombre.Length > 15)
+                                                        {
+                                                            <b style="color: white">@proyecto.Nombre.Substring(0, 12)...</b>
+                                                        }
+                                                        else
+                                                        {
+                                                            <b style="color: white">@proyecto.Nombre</b>
+                                                        }
+                                                    </div>
+                                                </MudNavLink>
+                                            }
+                                            else
+                                            {
+                                                <MudNavLink Disabled="false" IconColor="Color.Secondary" OnClick="() => HandleClick(proyecto)" style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div style="display: flex; align-items: center; width: 200px; /* Cambia el ancho según necesites */">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Small" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; margin-right: 15px;" : $"margin-right:15px;color: {tema.Theme.Palette.Primary.ToString()}")">
+                                                            @if (@proyecto.Cliente != null)
+                                                            {
+                                                                <b>@(proyecto.Cliente.Nombre.Substring(0, Math.Min(proyecto.Cliente.Nombre.Length, 2)))</b>
+                                                            }
+                                                            else
+                                                            {
+                                                                <b>@(proyecto.Nombre.Substring(0, Math.Min(proyecto.Nombre.Length, 2)))</b>
+                                                            }
+                                                        </MudAvatar>
+                                                        <b style="color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                            @(proyecto.Nombre.Length > 15 ? (proyecto.Nombre.Substring(0, 12) + "...") : proyecto.Nombre)
+                                                        </b>
+                                                        <MudAvatar Size="Size.Small" Color="Color.Success" Style="margin-left:10px">@totalAdmin</MudAvatar>
+                                                    </div>
+                                                </MudNavLink>
+
+
+
+                                            }
+
+                                        }
+                                        else
+                                        {
+                                            if (total != 0)
+                                            {
+
+                                                <MudNavLink Disabled="false" IconColor="Color.Secondary" OnClick="() => HandleClick(proyecto)" style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div style="display: flex; align-items: center; width: 200px; /* Cambia el ancho según necesites */">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Small" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; margin-right: 15px;" : $"margin-right:15px;color: {tema.Theme.Palette.Primary.ToString()}")">
+                                                            @if (@proyecto.Cliente != null)
+                                                            {
+                                                                <b>@(proyecto.Cliente.Nombre.Substring(0, Math.Min(proyecto.Cliente.Nombre.Length, 2)))</b>
+                                                            }
+                                                            else
+                                                            {
+                                                                <b>@(proyecto.Nombre.Substring(0, Math.Min(proyecto.Nombre.Length, 2)))</b>
+                                                            }
+                                                        </MudAvatar>
+                                                        <b style="color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@(proyecto.Nombre.Length > 15 ? (proyecto.Nombre.Substring(0, 12) + "...") : proyecto.Nombre)</b>
+                                                        <MudAvatar Size="Size.Small" Color="Color.Success" Style="margin-left:10px;">@total</MudAvatar>
+                                                    </div>
+                                                </MudNavLink>
+
+                                            }
+                                            else
+                                            {
+                                                <MudNavLink Disabled="false" IconColor="Color.Secondary" OnClick="() => HandleClick(proyecto)" style="display: flex; justify-content: space-between; align-items: center;">
+                                                    <div style="display: flex; align-items: center;">
+                                                    <MudAvatar Color="Color.Secondary" Size="Size.Small" Style="@( esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; margin-right: 15px;" : $"margin-right:15px;color: {tema.Theme.Palette.Primary.ToString()}")">
+                                                            @if (@proyecto.Cliente != null)
+                                                            {
+                                                                <b>@(proyecto.Cliente.Nombre.Substring(0, Math.Min(proyecto.Cliente.Nombre.Length, 2)))</b>
+                                                            }
+                                                            else
+                                                            {
+                                                                <b>@(proyecto.Nombre.Substring(0, Math.Min(proyecto.Nombre.Length, 2)))</b>
+                                                            }
+                                                        </MudAvatar>
+                                                        <b style="color: white">@(proyecto.Nombre.Length > 15 ? (proyecto.Nombre.Substring(0, 12) + "...") : proyecto.Nombre)</b>
+                                                    </div>
+                                                </MudNavLink>
+
+                                            }
+                                        }
+                                    }
+                                </div>
+
+                            }
+                            else
+                            {
+                            <MudIconButton Icon="@Icons.Material.Filled.BuildCircle" Size="Size.Large" Color="Color.Secondary" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}" : $"color: {tema.Theme.Palette.Primary.ToString()}")" Class="mt-2 mb-2"></MudIconButton>
+                                @foreach (var proyecto in _lstProyectos)
+                                {
+                                <MudAvatar Color="Color.Secondary" Size="Size.Small" Class="mt-2 mb-2" Style="@(esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}" : $"color: {tema.Theme.Palette.Primary.ToString()}")">
+                                        @if (@proyecto.Cliente != null)
+                                        {
+                                            <b>@(proyecto.Cliente.Nombre.Substring(0, Math.Min(proyecto.Cliente.Nombre.Length, 2)))</b>
+                                        }
+                                        else
+                                        {
+                                            <b>@(proyecto.Nombre.Substring(0, Math.Min(proyecto.Nombre.Length, 2)))</b>
+                                        }
+                                    </MudAvatar>
+                                }
+                            }
+                        </div>
+
+                    <form method="post" action="Identity/Account/Logout" style="position:absolute;margin-left:10px;margin-top:10px">
+                        <a onclick="this.closest('form').submit();">
+                            <MudNavLink Icon=@(@Icons.Material.Filled.Logout)
+                                        Disabled=false
+                                        IconColor="Color.Secondary">
+                                @if (getBindOpen)
+                                {
+
+                                        <b style="color: white;">Cerrar sesión</b>
+
+                                    }
+                                </MudNavLink>
+                            </a>
+                        </form>
+                        <MudToggleIconButton @bind-Toggled="@ModoNocturno"
+                                             Icon="@Icons.Material.Filled.LightMode" Color="@Color.Warning" Title="Off"
+                                             ToggledIcon="@Icons.Material.Filled.Nightlight" ToggledColor="@Color.Warning" ToggledTitle="On"
+                                             @onclick="@ActivarModoNocturno"
+                                             Style="margin-left:200px;margin-top:7px" />
+                    </MudNavMenu>
+
+                </MudDrawer>
+        <MudMainContent Style="padding-top:0">
+            <MudContainer Style="height: 100%" Class="@(esModoNocturno() ? "fondoModoOscuro" : "blue lighten-5")" MaxWidth="MaxWidth.False">
+                @Body
+            </MudContainer>
+        </MudMainContent>
+    </MudDrawerContainer>
+</MudLayout>
+</CascadingValue>
+
+@code {
+    private CheckinCheckout ultimoCheckinCheckout;
+    private CheckinCheckout ultimoCheckinCheckoutProyecto;
+    private List<ConfiguracionMenu> _menuItems = new List<ConfiguracionMenu>();
+    private List<Proyecto> _lstProyectos = new List<Proyecto>();
+    private List<Proyecto> proyectos = new List<Proyecto>();
+    int numeroNoLeidas = new();
+    //bool showingBell = true;
+    string styleNotificacion;
+    List<Notificacion> ListaNotificaciones = new List<Notificacion>();
+    private string _selectedProyecto = "";
+    [Inject] Microsoft.AspNetCore.Components.NavigationManager Navigation { get; set; }
+    public CPMUser usuario { get; set; }
+    public CPMUser user { get; set; }
+    public CheckinCheckout nuevoCheckin { get; set; } = new CheckinCheckout();
+    private MenuRol menuRol = null;
+    private string url = "";
+    private int idMenu = 0;
+    private bool EsEntrada;
+    List<Cliente> lstCliente = new List<Cliente>();
+    private List<string> _selectedClientes = new List<string>();
+    [Parameter] public string id { get; set; }
+    private MudMenu mudMenuProyectos;
+    private MudMenu mudmenuNotis;
+    private MudDrawer mudDrawerGlobal;
+    private MudNavGroup mudNavGroupConfiguracion;
+    private string nombre = "";
+    private List<MenuRol> ListaMenusRol = new List<MenuRol>();
+    private string cookie = "";
+    public string imagenPerfil { get; set; }
+    
+
+
+
+
+    public Action OnCheckinChanged;
+
+
+    public bool ModoNocturno { get; set; } 
+    public Action cambioModoNocturno=()=> { };
+    [Parameter]
+    public Proyecto proyecto { get; set; }
+
+    public async void ActivarModoNocturno()
+    {
+        if (cookie == "light" || cookie == "")
+        {
+            await localStorage.SetAsync("Tema", "dark");
+        } else {
+            await localStorage.SetAsync("Tema", "light");
+        }
+        ModoNocturno = !ModoNocturno;
+        cambioModoNocturno.Invoke();
+        StateHasChanged();
+
+    }
+    public bool esModoNocturno()
+    {
+        return ModoNocturno;
+    }
+
+    MudTheme MyCustomTheme = new MudTheme()
+        {
+            Palette = new PaletteLight()
+            {
+                Primary = "#009ee0",
+                Secondary = Colors.Shades.White,
+                AppbarBackground = Colors.Shades.White,
+                DrawerIcon = Colors.Shades.White,
+                Background = "#e3f2fd"
+            },
+            PaletteDark = new PaletteDark()
+            {
+                //Primary = Colors.Blue.Lighten1
+                Primary = "#212121",
+                Secondary = Colors.Shades.White,
+                AppbarBackground = Colors.Shades.White,
+                DrawerIcon = Colors.Shades.White,
+                Background = "#323232",
+                Surface = "#37474F",
+                Tertiary = "#FFFFFF",
+
+            },
+            LayoutProperties = new LayoutProperties()
+            {
+                DrawerWidthLeft = "260px",
+                DrawerWidthRight = "300px"
+            }
+        };
+
+    //collapse and expand MudDrawer fixed
+
+
+    bool bindOpen = true;
+
+    bool open = false;
+
+    string estiloDivProyectos = "flex: 1; overflow-y: auto; max-height: 50vh; scrollbar-color:white !important;";
+
+    private void changeOpenConfiguracion()
+    {
+
+        if(mudNavGroupConfiguracion.Expanded) {
+            estiloDivProyectos = "flex: 1; overflow-y: auto; max-height: 50vh; scrollbar-color:white !important;";
+        }
+
+        else
+        {
+            estiloDivProyectos = "flex: 1; overflow-y: auto; max-height: 50vh; scrollbar-color:white !important;";
+        }
+
+    }
+
+
+    /*
+    * Cambia el estilo en la UI segun la notificacion. Si esta leida aparecerá con fondo blanco
+    * Si no, con un fondo Azul
+     */
+
+    string StyleNoti(Notificacion noti)
+    {
+        if (noti.Leida == true)
+        {
+            return "width:270px;height:100px;background-color:white;padding:0px 10px;";
+        }
+        else
+        {
+            return "width:270px;height:100px;background-color:#7ec4f2;padding:0px 10px;";
+        }
+    }
+
+    /*
+    * Esta funcion recibe un texto, si la longitud de este es mayor a 30, solo se mostrará la cadena desde la posicion 0 hasta la 30
+    * Esto nos sirve por si la descripcion de una notificacion es demasiado larga para mostrarse en la UI
+     */
+
+    string SetShortDesc(string text)
+    {
+        if (text.Length > 30)
+        {
+            return text.Substring(0, 30) + "...";
+        }
+        else
+        {
+            return text;
+        }
+    }
+
+    //Funcion que cambia el estado bindOpen (si la pestaña es fija o movible)
+
+    void changeBellState()
+    {
+        bindOpen = !bindOpen;
+    }
+
+    /* 
+    Funcion que recibe una notificacion y la cambia a leida en la base de datos
+    Se llama cuando una notificacion que no habia sido leida se lee
+    Se vuelve a llamar a la funcion de obtener las no leidas, para que se visualizen los cambios
+    */
+
+    async void setNotiEliminada(int id)
+    {
+        //Cambiamos el estado de la notificacion a eliminada, pero no se borra de la DB, sino que ya no aparecerá en la lista
+        await Crud.ChangeEliminadaState(id);
+        //Se obtienen de nuevo la lista de notificaciones
+        await GetData();
+        StateHasChanged();
+    }
+
+
+    /*
+    * Funcion que recibe una notificacion, se pasa el id de esta a una funcion de la base de datos
+    * la cual cambia el estado de leida a true a la notificacion pasada por parametros
+    */
+    async void changeLeidaStatus(Notificacion noti)
+    {
+        //Se cambia en la base de datos
+        await Crud.ChangeNotificationLeidaStatus(noti.Id);
+        //Se obtienen de nuevos lass notificaciones
+        await GetData();
+        //Refresca componente
+        StateHasChanged();
+    }
+
+    /*
+    * Funcion que recibe una lista de notificaciones
+    * LLama a la funcion de la base de datos ChangeAllLeidaState, la cual con la lista de notificaciones
+    * cambia el estado de leida de cada una de ellas a true.
+     */
+
+    async void changeAllLeidaStatus(List<Notificacion> listanotis)
+    {
+        await Crud.ChangeAllLeidaState(listanotis);
+        await GetData();
+        StateHasChanged();
+    }
+
+    /*
+    * Recibe una notificacion y llama a la funcion de eliminar notificacion de 
+    * la base de datos.
+    */
+    async void DeleteNotification(Notificacion noti)
+    {
+        //Eliminamos la notificacion de la base de datos
+        await Crud.DeleteNotification(noti.Id);
+        //Traemos de nuevo los resultados de la base de datos
+        await GetData();
+        StateHasChanged();
+    }
+
+
+    /*
+    * En esta funcion, al recargar la pagina por primera vez, se llamará a la funcion initialize
+    * La cual establecerá la conexion con el hub pendiente de si se envia alguna notificacin
+    */
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(firstRender){
+            await JSRuntime.InvokeVoidAsync("initialize", DotNetObjectReference.Create(this));
+            // await GetData();
+            StateHasChanged();
+            try
+            {
+                ProtectedBrowserStorageResult<string> Resultado = await localStorage.GetAsync<string>("Tema");
+
+                if (Resultado.Success)
+                {
+                    cookie = Resultado.Value.ToString();
+                }
+
+                if (cookie == "dark")
+                {
+                    ModoNocturno = true;
+                }
+            }
+            catch (Exception e)
+            {
+                
+            }
+        }
+
+
+    }
+
+    bool getBindOpen
+    {
+        get => bindOpen ? bindOpen : open;
+        set => open = value;
+    }
+    private void verificarMudDrawer()
+    {
+        if (getBindOpen == true && mudDrawerGlobal.Open == true) mudDrawerGlobal.Open = false;
+
+        if (mudMenuProyectos.IsOpen==true && getBindOpen == false)
+        {
+            getBindOpen = true;
+        }
+        if (mudmenuNotis.IsOpen==true && getBindOpen == false)
+        {
+            getBindOpen = true;
+        }
+    }
+
+
+    private void expansionMudDrawer()
+    {
+
+        mudDrawerGlobal.Open = true;
+
+    }
+
+    private bool isProcessingCheckInOut = false;
+
+    private async Task ToggleCheckInStatus()
+    {
+        // Se intenta evitar múltiples check-in/check-out seguidos
+
+        if (isProcessingCheckInOut)
+        {
+            return;
+        }
+
+
+        isProcessingCheckInOut = true;
+
+
+        if (string.IsNullOrEmpty(_selectedProyecto))
+        {
+
+            isProcessingCheckInOut = false;
+            return;
+        }
+
+        if (EsEntrada)
+        {
+            await RegistrarCheckout(_selectedProyecto);
+            EsEntrada = false;
+        }
+        else if (!EsEntrada)
+        {
+            await RegistrarCheckin(_selectedProyecto);
+            EsEntrada = true;
+        }
+
+        // Una vez completado el check-in / check-out, indica que el proceso ha terminado
+        isProcessingCheckInOut = false;
+
+        // Actualiza el estado del componente
+        StateHasChanged();
+    }
+
+    private async Task OnClick(int proyectoID)
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        var proyectoSelected = await ctx.Proyectos.AsNoTracking().FirstOrDefaultAsync(it => it.Id == proyectoID);
+
+        ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+
+        // Verifica si el último registro de check-in/check-out fue para el mismo proyecto
+        if (ultimoCheckinCheckout != null && ultimoCheckinCheckout.Proyecto.Id == proyectoID)
+        {
+            // Si el último registro para este proyecto fue un check-out, realiza un check-in
+            if (!ultimoCheckinCheckout.Entrada)
+            {
+                await RegistrarCheckin(proyectoSelected.Nombre);
+                EsEntrada = true;
+            }
+            // Si el último registro fue un check-in, no se hace nada (o se maneja según la lógica deseada)
+            // if (ultimoCheckinCheckout.Entrada) {}
+
+            _selectedProyecto = proyectoSelected.Nombre;
+            EsEntrada = true;
+        }
+        else
+        {
+            // Si el último check-in fue en un proyecto diferente, realiza check-out en ese proyecto
+            if (ultimoCheckinCheckout != null && ultimoCheckinCheckout.Entrada)
+            {
+                await RegistrarCheckout(ultimoCheckinCheckout.Proyecto.Nombre);
+            }
+
+            // Y luego realiza un check-in en el nuevo proyecto seleccionado
+            await RegistrarCheckin(proyectoSelected.Nombre);
+            _selectedProyecto = proyectoSelected.Nombre;
+            EsEntrada = true;
+        }
+
+        StateHasChanged();
+    }
+
+
+
+    class ConfiguracionMenu
+    {
+        public int id { get; set; }
+        public string nombre { get; set; }
+        public string enlace { get; set; }
+        public string icono { get; set; }
+        public string grupotitulo { get; set; }
+        public int orden { get; set; }
+        public bool esgrupo { get; set; }
+        public string idusuariomenu { get; set; }
+        public bool activo { get; set; }
+        public int incidencia{ get; set; }
+    }
+
+    class ProyectoMenu
+    {
+        public int Id { get; set; }
+
+        public string Nombre { get; set; }
+        public Estado Estado { get; set; }
+        public DateTime FechaPrevistaEntrega { get; set; }
+        public DateTime FechaPrevistaContrato { get; set; }
+        public int HorasEstimadas { get; set; }
+        public string enlace { get; set; }
+        public int Incidencias{ get; set; }
+    }
+
+    private void HandleClick(Proyecto proyecto)
+    {   
+        NavigationManager.NavigateTo($"/Proyectos/{proyecto.Id}", false);
+    }
+
+    private void NavigateToProjects()
+    {
+        if (menuRol != null)
+        {
+            NavigationManager.NavigateTo("/Proyectos");
+        }
+
+    }
+    public async Task RecargaMainLayout()
+    {
+
+        await RecargarRol();
+        await CargarProyectos();
+        CargarMenus();
+        await CargarClientes();
+        StateHasChanged();
+    }
+
+    public async Task RecargarRol()
+    {
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+    }
+
+    public async Task CargarProyectos()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        if (menuRol != null)
+        {
+            proyectos = await ctx.Proyectos
+                .Where(p => !p.Estado.Oculto)
+                .Include(p => p.Cliente)
+                .Include(it => it.Incidencias).ThenInclude(it => it.UsuarioAsignado)
+                .Include(it => it.Incidencias).ThenInclude(it => it.EstadoIncidencia)
+                .Include(it => it.Desarrollos).ThenInclude(it => it.UsuarioAsignado)
+                .Include(it => it.Desarrollos).ThenInclude(it => it.EstadoDesarrollo)
+                .ToListAsync();
+        }
+        else
+        {
+            proyectos = await ctx.Proyectos
+                .Where(p => !p.Estado.Oculto)
+                .Include(p => p.Cliente)
+                .Include(it => it.Incidencias).ThenInclude(it => it.UsuarioAsignado)
+                .Include(it => it.Incidencias).ThenInclude(it => it.EstadoIncidencia)
+                .Include(it => it.Desarrollos).ThenInclude(it => it.UsuarioAsignado)
+                .Include(it => it.Desarrollos).ThenInclude(it => it.EstadoDesarrollo)
+                .Where(proyecto => ctx.ProgramadoresProyectos.Any(pro => pro.Programador.Id == usuario.Id && pro.Proyecto.Id == proyecto.Id))
+                .ToListAsync();
+        }
+        _lstProyectos = proyectos;
+    }
+
+
+    private bool isLoading = true;
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(NavigationManager.Uri);
+        Uri basePath = new Uri(NavigationManager.BaseUri);
+        string relativeUri = basePath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        int menuId = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum)))
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                menuId = (int)menuOption;
+                return menuId;
+            }
+        }
+        return menuId;
+    }
+
+
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldInfo = type.GetField(nombre);
+
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldInfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await _ApplicationDbContext.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus);
+        var usuarioActual = usuario;
+        if (usuarioActual.Foto != null)
+        {
+            imagenPerfil = Convert.ToBase64String(usuarioActual.Foto);
+        }
+        else
+        {
+            imagenPerfil = string.Empty;
+        }
+
+        url = "Proyectos";
+        idMenu = GetIdMenu(url);
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        //Obtenemos las notificaciones no Leidas
+        await GetData();
+        CargarMenus();
+
+     
+        if (usuario != null)
+        {
+            nombre = usuario.UserName;
+
+            _menuItems = new List<ConfiguracionMenu>
+             {
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.VistaTrabajo,
+                     nombre = "Vista trabajo",
+                     enlace = "VistaTrabajo",
+                     icono = "Assignment",
+                     esgrupo = false,
+                     orden = 1,
+                     grupotitulo = "",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.VistaProyecto,
+                     nombre = "Vista proyecto",
+                     enlace = "VistaProyecto",
+                     icono = "Book",
+                     esgrupo = false,
+                     orden = 1,
+                     grupotitulo = "",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+
+                  new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.VistaRentabilidad,
+                     nombre = "Vista Rentabilidad",
+                     enlace = "VistaRentabilidad",
+                     icono = "TrendingUp",
+                     esgrupo = false,
+                     orden = 1,
+                     grupotitulo = "",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.EstadoProyectos,
+                     nombre = "Estado de proyectos",
+                     enlace = "EstadoProyectos",
+                     icono = "ViewList",
+                     esgrupo = false,
+                     orden = 1,
+                     grupotitulo = "",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Proyectos,
+                     nombre = "Proyectos",
+                     enlace = "Proyectos",
+                     icono = "",
+                     esgrupo = false,
+                     orden = 2,
+                     grupotitulo = "",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Configuracion,
+                     nombre = "Configuración",
+                     enlace = "",
+                     icono = "Settings",
+                     esgrupo = true,
+                     orden = 100,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = false
+                 },
+                  new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Usuarios,
+                     nombre = "Usuarios",
+                     enlace = "Usuarios",
+                     icono = "AccountCircle",
+                     esgrupo = false,
+                     orden = 101,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Roles,
+                     nombre = "Roles",
+                     enlace = "Roles",
+                     icono = "AdminPanelSettings",
+                     esgrupo = false,
+                     orden = 102,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Equipos,
+                     nombre = "Equipos",
+                     enlace = "Equipos",
+                     icono = "Groups",
+                     esgrupo = false,
+                     orden = 103,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Estados,
+                     nombre = "Estados",
+                     enlace = "Estados",
+                     icono = "ViewList",
+                     esgrupo = false,
+                     orden = 104,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.EstadoDesarrollo,
+                     nombre = "Estados de desarrollo",
+                     enlace = "ListaEstadosDesarrollo",
+                     icono = "Build",
+                     esgrupo = false,
+                     orden = 105,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.EstadoIncidencia,
+                     nombre = "Estados de incidencia",
+                     enlace = "ListaEstadosIncidencia",
+                     icono = "BugReport",
+                     esgrupo = false,
+                     orden = 106,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Clientes,
+                     nombre = "Clientes",
+                     enlace = "Clientes",
+                     icono = "BusinessCenter",
+                     esgrupo = false,
+                     orden = 108,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Tecnologias,
+                     nombre = "Tecnologías",
+                     enlace = "Tecnologias",
+                     icono = "Engineering",
+                     esgrupo = false,
+                     orden = 109,
+                     grupotitulo = "Configuración",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.Reportes,
+                     nombre = "Reportes",
+                     enlace = "",
+                     icono = "Report",
+                     esgrupo = true,
+                     orden = 50,
+                     grupotitulo = "Reportes",
+                     idusuariomenu = usuario.Id,
+                     activo = false
+                 },
+                 new ConfiguracionMenu
+                 {
+                     id = (int)MenuEnum.BalanceHoras,
+                     nombre = "Balance horas",
+                     enlace = "BalanceHoras",
+                     icono = "AccessTimeFilled",
+                     esgrupo = false,
+                     orden = 51,
+                     grupotitulo = "Reportes",
+                     idusuariomenu = usuario.Id,
+                     activo = true
+                 }
+             }
+              .OrderBy(p => p.orden)
+              .ToList<ConfiguracionMenu>();
+
+            await CargarProyectos();
+
+            await CargarClientes();
+            ultimoCheckinCheckout = await ObtenerUltimoCheckinCheckout();
+            if (ultimoCheckinCheckout != null)
+            {
+                if (ultimoCheckinCheckout.Entrada)
+                {
+                    _selectedProyecto = ultimoCheckinCheckout.Proyecto.Nombre;
+                    EsEntrada = true;
+                }
+                else
+                {
+                    EsEntrada = false;
+                }
+            }
+            else
+            {
+                // Manejar el caso cuando ultimoCheckinCheckout es null
+                // Por ejemplo, puedes establecer valores predeterminados o mostrar un mensaje al usuario
+            }
+            isLoading = false;
+            StateHasChanged();
+
+        }
+        //KeepUpdated();
+        await base.OnInitializedAsync();
+    }
+
+
+    /* public async Task CallJSMethod(){
+    //Llamamos al metodo initialize de JavaScript, y creamos una referencia de DotNetObject
+        await JSRuntime.InvokeVoidAsync("initialize", DotNetObjectReference.Create(this));
+    }*/
+
+    //async void KeepUpdated()
+    //{
+    //    while (true){
+    //        await CargarProyectos();
+    //        await CargarClientes();
+    //        Thread.Sleep(5000);
+    //    }
+    //}
+
+
+    private void CargarMenus()
+    {
+        ListaMenusRol = _ApplicationDbContext.MenuRoles
+            .Where(menuRol => menuRol.Rol == usuario.Rol)
+            .Select(menuRol => new MenuRol
+                {
+                    ID = menuRol.ID,
+                    IdMenu = menuRol.IdMenu,
+                    Rol = menuRol.Rol
+                })
+            .ToList();
+    }
+
+
+    private string TextSelection(string proyecto)
+    {
+        if (proyecto == "")
+        {
+            return "NINGUN PROYECTO";
+        }
+        else
+        {
+            return proyecto;
+        }
+    }
+    // Ultimo registro del usuario del proyecto
+    private async Task<CheckinCheckout> ObtenerUltimoCheckinCheckoutProyecto(Proyecto proyecto)
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        var ultimoCheckin = await ctx.CheckinCheckouts
+         .Where(c => c.Usuario == usuario && c.Proyecto == proyecto)
+             .OrderByDescending(c => c.Fecha)
+             .FirstOrDefaultAsync();
+
+        return ultimoCheckin;
+    }
+
+    // Ultimo registro del usuario
+    private async Task<CheckinCheckout> ObtenerUltimoCheckinCheckout()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        var ultimoCheckin = await ctx.CheckinCheckouts
+            .Where(c => c.Usuario == usuario).Include(it => it.Proyecto)
+            .OrderByDescending(c => c.Fecha)
+            .FirstOrDefaultAsync();
+
+
+        return ultimoCheckin;
+    }
+
+    private async Task ObtenerUsuarioActual(ApplicationDbContext ctx)
+    {
+        user = ctx.Users.FirstOrDefault(u => u.Id == usuario.Id);
+    }
+
+
+    private async Task RegistrarCheckout(string proyecto)
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        var proyectoSelected = await ctx.Proyectos.FirstOrDefaultAsync(it => it.Nombre == proyecto);
+        await ObtenerUsuarioActual(ctx);
+        if (proyecto != null)
+        {
+            var nuevoCheckout = new CheckinCheckout
+                {
+                    Entrada = false,
+                    Fecha = DateTime.Now,
+                    Usuario = user,
+                    Proyecto = proyectoSelected
+                };
+
+            ctx.CheckinCheckouts.Add(nuevoCheckout);
+
+            await ctx.SaveChangesAsync();
+            OnCheckinChanged.Invoke();
+        }
+
+    }
+
+    private async Task<string> ObtenerUltimoProyecto()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        await ObtenerUsuarioActual(ctx);
+
+        // Obtiene el último registro de check-in o check-out del usuario
+        var ultimoCheck = await ctx.CheckinCheckouts
+            .Where(c => c.Usuario == user)
+            .Where(c => c.Entrada)
+            .OrderByDescending(c => c.Fecha)
+            .FirstOrDefaultAsync();
+
+        // Si hay un último registro, devuelve el nombre del proyecto
+        if (ultimoCheck != null)
+        {
+            return ultimoCheck.Proyecto.Nombre;
+        }
+
+        // Si no hay un último registro, devuelve null
+        return null;
+    }
+
+
+    private async Task RegistrarCheckin(string proyecto)
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+        var proyectoSelected = await ctx.Proyectos.FirstOrDefaultAsync(it => it.Nombre == proyecto);
+        await ObtenerUsuarioActual(ctx);
+        if (proyecto != null)
+        {
+            nuevoCheckin = new CheckinCheckout();
+            nuevoCheckin.Entrada = true;
+            nuevoCheckin.Fecha = DateTime.Now;
+            nuevoCheckin.Usuario = user;
+            nuevoCheckin.Proyecto = proyectoSelected;
+            Console.WriteLine(user);
+            ctx.CheckinCheckouts.Add(nuevoCheckin);
+            ctx.SaveChanges();
+        }
+    }
+
+
+    private async Task CargarClientes()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        List<String> clientes = proyectos.ConvertAll(c => c.Cliente == null? "" : c.Cliente.Nombre);
+
+        lstCliente = await ctx.Clientes.Where(c => 
+            c.Nombre != null && clientes.Contains(c.Nombre)).ToListAsync();
+    }
+
+    private async void FiltrarProyectos()
+    {
+        _lstProyectos = new List<Proyecto>();
+        if(_selectedClientes.Count() > 0)
+        {
+            foreach(var item in _selectedClientes)
+            {
+                _lstProyectos.AddRange(proyectos.Where(p => p.Cliente?.Nombre == item));
+            }
+        }
+        else
+        {
+            await OnInitializedAsync();
+        }
+
+    }
+
+    private async void ToggleSelection(string item)
+    {
+        if (_selectedClientes.Contains(item))
+        {
+            _selectedClientes.Remove(item);
+        }
+        else
+        {
+            _selectedClientes.Add(item);
+        }
+        FiltrarProyectos();
+    }
+
+    private Color GetIconColor()
+    {
+        return _selectedClientes.Count() > 0 ? Color.Success : Color.Secondary;
+    }
+
+    DialogOptions options()
+    {
+        return new DialogOptions { CloseOnEscapeKey = true };
+    } 
+
+    //Establecemos la anotacion JSInvokable para que esta funcion se pueda invocar al codigo javascript
+    [JSInvokable("Notifunc")]
+    public async void Notifunc()
+    {
+        //Esta es la UI en la que veremos la notificacion
+        //Creamos un Pop Up que nos indica que se nos ha asignado una incidencia
+
+        snackbar.Add($"Nueva Incidencia Asignada {DateTime.Now}", severity:Severity.Info);
+
+        /*Obtenemos de nuevo los datos, ya que esta funcion se llamará al añadir una nueva notificacion
+         y tenemos que obtener de nuevo los datos.*/
+
+        await GetData();
+        StateHasChanged();
+    }
+
+     /*
+     * Esta funcion llama a las funciones que se encargan de recibir las notificaciones de la base de datos y el numero de notificaciones
+     * que aun no se han leido.
+    */
+    public async Task GetData()
+    {
+        try
+        {
+            if (usuario is not null)
+            {
+                ListaNotificaciones = await Crud.GetAllNotifications(usuario.Id);
+                numeroNoLeidas = await Crud.GetAllNoLeidas(usuario.Id);
+                
+            }
+        }
+        catch (Exception _)
+        {
+            //
+        }
+    }
+
+
+}

@@ -1,0 +1,251 @@
+﻿@page "/Tecnologias"
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Controlnet_Project_Manager.Shared.Model
+@using Microsoft.EntityFrameworkCore
+@using MudBlazor
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using System.Reflection
+@using System.ComponentModel
+
+@inject CRUD Crud
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDialogService _dialogService
+@inject NavigationManager _navigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<CPMUser> _UserManager
+
+@attribute [Authorize]
+
+@{
+    List<Button> botones = new List<Button>()
+    {
+        new ActionButton { Text = "Nueva Tecnología",  OnClick = NewTecnologia , Icon = @Icons.Material.Filled.Add }
+
+    };
+}
+
+@if (!Cargando)
+{
+    @if (menuRol != null)
+    {
+        @if (menuRol.Crear)
+        {
+            <ToolBar Title="CONFIGURACION&nbsp;DE&nbsp;TECNOLOGIAS" ButtonsLeft="botones"></ToolBar>
+        }
+        else
+        {
+            <ToolBar Title="CONFIGURACION&nbsp;DE&nbsp;TECNOLOGIAS"></ToolBar>
+        }
+
+        <br />
+        <br />
+
+        <MudDataGrid @ref="@_grid" Items="@FiltrarTecnologias()" T="Tecnologia" RowClick="@((x)=>EditTecnologiaDialog(x.Item))" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true" Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15">
+
+            <ToolBarContent>
+                <MudText Typo="Typo.h6">Tecnologías</MudText>
+                <MudSpacer />
+                <MudSpacer />
+                <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense"
+                              Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+                </MudTextField>
+            </ToolBarContent>
+
+            <Columns>
+                <PropertyColumn T="Tecnologia" TProperty="string" Property="x => x.Nombre" Title="Nombre de la tecnología"/>
+                <TemplateColumn Sortable="true" Title="Activo">
+                    <CellTemplate>
+                        <span @onclick:stopPropagation="true">
+                            <MudTooltip Text="Activar/Desactivar">
+                                <MudSwitch T="bool" Checked="@context.Item.EstaActivo" ThumbIcon="@(context.Item.EstaActivo == true ? Icons.Material.Filled.Done : Icons.Material.Filled.Close)" ThumbIconColor="@(context.Item.EstaActivo == true ? Color.Success : Color.Error)"
+                                           CheckedChanged="(e) => {if(menuRol != null && menuRol.Editar) {CambiarEstado(e, context.Item);}}" />
+                            </MudTooltip>
+                        </span>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false" Title="Color">
+                    <CellTemplate>
+                        <div style="width: 20px; height: 20px; background-color: @context.Item.Color"></div>
+                    </CellTemplate>
+                </TemplateColumn>
+                <TemplateColumn Sortable="false">
+                    <CellTemplate>
+                        @if (menuRol != null && menuRol.Editar)
+                        {
+                            <MudTooltip Text="Editar">
+                                <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Filled.Edit" Color="@(Layout.esModoNocturno() ? Color.Tertiary: Color.Primary)" OnClick="@((e) => { EditTecnologiaDialog(context.Item); })" />
+                            </MudTooltip>
+                        }
+                        @if (menuRol != null && menuRol.Eliminar)
+                        {
+                            <MudTooltip Text="Eliminar">
+                                <MudIconButton Size="@Size.Small" Icon="@Icons.Material.Filled.Delete" Color="@(Layout.esModoNocturno() ? Color.Tertiary: Color.Primary)" OnClick="@((e) => { EliminarTecnologia(context.Item); })" />
+                            </MudTooltip>
+                        }
+                    </CellTemplate>
+                </TemplateColumn>
+            </Columns>
+
+            <PagerContent>
+                <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+            </PagerContent>
+        </MudDataGrid>
+
+    }
+
+    else if (menuRol == null)
+    {
+        <MudText Typo="Typo.h6" Align="Align.Center">Oops, no estás autorizado para ver esta página</MudText>
+    }
+
+
+} 
+else
+{
+    <ToolBar Title="CONFIGURACION&nbsp;DE&nbsp;TECNOLOGIAS"></ToolBar>
+    <br />
+    <div style="display:flex; align-items:center; justify-content:center">
+        <MudProgressCircular Indeterminate="true"></MudProgressCircular>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    public CPMUser usuario { get; set; }
+    private int _selectedPage;
+    private bool Cargando = true;
+    private string url = "";
+    private int idMenu = 0;
+    private MenuRol menuRol = null;
+    private MudDataGrid<Tecnologia> _grid;
+    private string _searchString = "";
+    private List<Tecnologia> lstTecnologias = new List<Tecnologia>();
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        await obtenerUsuario();
+        url = GetLastSegmentUrl();
+        idMenu = GetIdMenu(url);
+        _selectedPage = 0;
+        menuRol = await Crud.GetMenuRol(idMenu, usuario);
+        await CargarTecnologias();
+        Cargando = false;
+        StateHasChanged();
+    }
+
+    private async Task obtenerUsuario()
+    {
+        using var ctx = await DbFactory.CreateDbContextAsync();
+        var idus = _UserManager.GetUserId((await AuthenticationStateProvider.GetAuthenticationStateAsync()).User);
+        usuario = await ctx.Users.Include(it => it.Rol)
+                                                    .ThenInclude(it => it.Menus)
+                                                    .FirstOrDefaultAsync(it => it.Id == idus) ?? new CPMUser();
+    }
+
+    private string GetLastSegmentUrl()
+    {
+        Uri uri = new Uri(_navigationManager.Uri);
+        Uri basepath = new Uri(_navigationManager.BaseUri);
+        string relativeUri = basepath.MakeRelativeUri(uri).ToString();
+        return relativeUri;
+    }
+
+    private int GetIdMenu(string url)
+    {
+        idMenu = 0;
+        foreach (MenuEnum menuOption in Enum.GetValues(typeof(MenuEnum))) 
+        {
+            if (GetEnumDescription(menuOption).Equals(url))
+            {
+                idMenu = (int)menuOption;
+                return idMenu;
+            }
+        }
+        return idMenu;
+    }
+
+    private string GetEnumDescription(Enum value)
+    {
+        Type type = value.GetType();
+        string nombre = Enum.GetName(type, value);
+        FieldInfo fieldinfo = type.GetField(nombre);
+        DescriptionAttribute attribute = Attribute.GetCustomAttribute(fieldinfo, typeof(DescriptionAttribute)) as DescriptionAttribute;
+        return attribute == null ? null : attribute.Description;
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+    async Task CargarTecnologias()
+    {
+        await using var ctx = await DbFactory.CreateDbContextAsync();
+
+        lstTecnologias = ctx.Tecnologias.ToList();
+        StateHasChanged();
+    }
+
+    private List<Tecnologia> FiltrarTecnologias()
+    {
+        return lstTecnologias.FindAll(it => it != null && it.Nombre != null && it.Nombre.Contains(_searchString, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private async void NewTecnologia()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true };
+        var parameters = new DialogParameters();
+        var dialog = await _dialogService.Show<NewTecnologia>("Nueva tecnología", parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            await CargarTecnologias();
+            StateHasChanged();
+        }
+    }
+
+    private async Task CambiarEstado(bool? estado, Tecnologia EstadoTecnologia)
+    {
+        if (estado != null)
+        {
+            EstadoTecnologia.EstaActivo = estado.Value;
+            _ApplicationDbContext.Tecnologias.Update(EstadoTecnologia);
+            _ApplicationDbContext.SaveChanges();
+        }
+        StateHasChanged();
+    }
+
+    private async Task EditTecnologiaDialog(Tecnologia tecnologia)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true};
+        var parameters = new DialogParameters();
+        parameters.Add("Tecnologia", tecnologia);
+        var dialog = await _dialogService.Show<NewTecnologia>("Editar tecnología", parameters, options).Result;
+
+        if (dialog.Data != null)
+        {
+            await CargarTecnologias();
+            StateHasChanged();
+        }
+    }
+
+    private async void EliminarTecnologia(Tecnologia tecnologia)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar tecnología", "¿Seguro que quieres eliminar esta tecnología?", "Sí", "No");
+        tecnologia = _ApplicationDbContext.Tecnologias.FirstOrDefault(it => it.Id == tecnologia.Id);
+
+        if (result is true && tecnologia is not null)
+        {
+            _ApplicationDbContext.Tecnologias.Remove(tecnologia);
+            await _ApplicationDbContext.SaveChangesAsync();
+        }
+
+        CargarTecnologias();
+        StateHasChanged();
+    }
+}

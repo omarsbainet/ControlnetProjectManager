@@ -1,0 +1,101 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Data;
+@using System.Net;
+@using System.Net.Mail;
+@using System.Text;
+@using System.Xml.Linq;
+@using Controlnet_Project_Manager.Areas.Identity.Data;
+@using Controlnet_Project_Manager.Data;
+@using MudBlazor;
+
+@inject AuthenticationStateProvider _auth;
+@inject IHttpContextAccessor _httpContextAccessor;
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudSelect Label="Proyecto" @bind-Value="EquiposProyectos.Proyecto" Variant="Variant.Outlined" Margin="Margin.Dense">
+                <MudSelectItem Value="(int?)null">Sin Proyecto</MudSelectItem>
+                @foreach (var item in lstProyecto)
+                {
+                    <MudSelectItem Value="@item">@item.Nombre</MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    [Parameter] public Proyecto Proyecto { get; set; }
+    [Parameter] public EquiposProyecto EquiposProyectos { get; set; }
+    [Inject] private IDialogService DialogService { get; set; }
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<Proyecto> lstProyecto = new List<Proyecto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        if (EquiposProyectos.Id != 0 && EquiposProyectos.Id != null)
+        {
+            //Cargamos con los datos que corresponde a la id
+            EquiposProyectos = _ApplicationDbContext.EquiposProyectos.FirstOrDefault(u => u.Id == EquiposProyectos.Id);
+        }
+
+        // Cargar los estados
+        await cargarProyectos();
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(EquiposProyectos).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (EquiposProyectos.Id != 0 && EquiposProyectos.Id != null)
+                {
+                    //Editar Proyecto
+                    _ApplicationDbContext.EquiposProyectos.Update(EquiposProyectos);
+                }
+
+                // Guarda los cambios en la base de datos.
+                _ApplicationDbContext.SaveChanges();
+                //Cerrar el Dialog
+                MudDialog.Close(DialogResult.Ok<EquiposProyecto>(EquiposProyectos));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+
+    //Cargar los estados de base de datos para mostrarlos en MudSelect
+    async Task cargarProyectos()
+    {
+        lstProyecto = _ApplicationDbContext.Proyectos.OrderBy(proyecto => proyecto.Nombre).ToList();
+    }
+
+}

@@ -1,0 +1,329 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using System.Reflection;
+@using System.ComponentModel;
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+
+
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject IDialogService _dialogService;
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime;
+@inject NavigationManager _navigationManager
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+
+
+
+<MudDataGrid @ref="@_grid" Items="@incidenciaPadre.Hijos" T="Incidencia" RowClick="@((x)=>EditIncidenciaDialog(x.Item))"
+                 Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true"
+             Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15" >
+   
+    <Columns>
+        @* Representación de los datos de los incidencias *@
+        <HierarchyColumn T="Incidencia" ButtonDisabledFunc="@(x => x.Hijos == null || x.Hijos.Count() == 0)" />
+        <PropertyColumn T="Incidencia" TProperty="string" Property="x => x.Nombre" Title="Nombre"  />
+        <PropertyColumn T="Incidencia" TProperty="string" Property="x => GetAutor(x)" Title="Autor" />
+        <TemplateColumn SortBy="x => x.UsuarioAsignado == null ? null : x.UsuarioAsignado.Nombre" >
+            <HeaderTemplate>Programador</HeaderTemplate>
+            <CellTemplate>
+                <span @onclick:stopPropagation="true">
+                    <MudChip Color="Color.Primary"
+                             OnClick="@((e) => {if ((menuRol != null && menuRol.Editar) || context.Item.UsuarioAsignado == null) { EditProgramadorDialog(context.Item);}})">
+                        @if (context.Item.UsuarioAsignado == null)
+                        {
+                            @txtSinProg;
+                        }
+                        else
+                        {
+                            @context.Item.UsuarioAsignado?.Nombre;
+                        }
+
+                    </MudChip>
+                </span>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn SortBy="x => x.EstadoIncidencia == null ? null : x.EstadoIncidencia.Nombre">
+            <HeaderTemplate>Estado</HeaderTemplate>
+            <CellTemplate>
+                @{
+                    var color = $"background-color: {context.Item.EstadoIncidencia?.Color};";
+                }
+                <span @onclick:stopPropagation="true">
+                    <MudChip Color="Color.Primary" Style="@color"
+                             OnClick="@((e) => { if(menuRol != null && (menuRol.Editar || menuRol.Rol.Name.ToUpper() == "CLIENTE" )) EditEstadoDialog(context.Item); })">
+                        @context.Item.EstadoIncidencia?.Nombre
+                    </MudChip>
+                </span>
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn T="Incidencia" TProperty="DateTime" Property="x => x.FechaCreacion" Title="Fecha de creacion" Format="dd/MM/yyyy"  />
+        <PropertyColumn T="Incidencia" TProperty="DateTime?" Property="x => x.FechaCerrada" Title="Fecha cerrada" Format="dd/MM/yyyy"  />
+        <TemplateColumn Sortable="false">
+            <CellTemplate>
+                @*Editar Incidencia*@
+                <MudButtonGroup VerticalAlign="false" Color="Color.Primary" Variant="Variant.Outlined">
+
+                    <MudTooltip Text="Ver Información">
+                        <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye" Color="Color.Primary" OnClick="@((e) => { InfoIncidenciaDialog(context.Item); })" />
+                    </MudTooltip>
+                    @if (menuRol != null && menuRol.Crear)
+                    {
+                        <MudTooltip Text="Agregar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@((e) => {  NewIncidenciaDialog(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    @if (menuRol != null && menuRol.Editar)
+                    {
+                        <MudTooltip Text="Editar Incidencia">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@((e) => { EditIncidenciaDialog(context.Item); })" />
+                        </MudTooltip>
+                    }
+                    @if (menuRol != null && menuRol.Eliminar)
+                    {
+                        <MudTooltip Text="Eliminar">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@((e) => { EliminarIncidencia(context.Item); })" />
+                        </MudTooltip>
+                    }
+
+                </MudButtonGroup>
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+   
+    <ChildRowContent>
+        @if (context.Item.Hijos != null && context.Item.Hijos.Count() > 0)
+        {
+            <CascadingValue Value="this">
+                <SubIncidenciaLista proyectoPadre="@proyectoPadre" incidenciaPadre="@context.Item" id="@proyectoPadre.Id.ToString()"></SubIncidenciaLista>
+            </CascadingValue>
+           
+        }
+
+    </ChildRowContent>
+
+
+</MudDataGrid>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    [Parameter] public Incidencia incidenciaPadre { get; set; }
+    [Parameter] public Proyecto proyectoPadre { get; set; }
+    private MudDataGrid<Incidencia> _grid;
+    private int _selectedPage;
+    private List<Incidencia> lstIncidencia = new List<Incidencia>();
+    private MenuRol menuRol = null;
+    string txtSinProg = "Sin asignar";
+    public CPMUser usuario { get; set; }
+    public Incidencia incidencia { get; set; }
+    [Parameter] public string id { get; set; }
+    [Parameter] public EventCallback<int> OnCountIncidencia { get; set; }
+    [CascadingParameter] public ListaIncidencia listaIncidencia{ get; set; }
+    [CascadingParameter] public SubIncidenciaLista SubListaIncidencia { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                usuario = Layout.usuario;
+
+                //url = GetLastSegmentUrl();
+                //idMenu = GetIdMenu(url);
+                menuRol = await Crud.GetMenuRol((int)MenuEnum.Incidencias, usuario);
+            }
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+    private async Task EditIncidenciaDialog(Incidencia inc)
+    {
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+        var parameters = new DialogParameters();
+        parameters.Add("incidencia", inc);
+        parameters.Add("proyecto", proyectoPadre);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<NewIncidencia>("Editar Incidencia", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            // Si FinalizacionIncidencia está activo, establecer la FechaFinalizacion
+            if (inc.EstadoIncidencia.CierraIncidencia)
+            {
+                inc.FechaCerrada = DateTime.Now;
+                _ApplicationDbContext.Incidencias.Update(inc);
+                _ApplicationDbContext.SaveChanges();
+            }
+
+            await CargarIncidenciasPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+
+    }
+    private async Task CargarIncidenciasPorProyecto(Proyecto pro)
+    {
+        try
+        {
+            lstIncidencia = await _ApplicationDbContext.Incidencias
+            .Include(it => it.EstadoIncidencia)
+            .Include(it => it.Proyecto)
+            .Include(it => it.Autor)
+            .Where(incidencias => incidencias.Proyecto.Id == pro.Id)
+            .ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarIncidenciasPorProyecto(pro);
+        }
+    }
+    public string GetAutor(Incidencia d)
+    {
+        return d?.Autor?.Nombre ?? "";
+    }
+    private async Task EditProgramadorDialog(Incidencia inc)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("incidencia", inc);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        parameters.Add("usuario", usuario);
+        parameters.Add("proyecto", proyectoPadre);
+        parameters.Add("allow", menuRol != null);
+        var dialog = await _dialogService.Show<EditProgramador>("Asignar programador", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            await CargarIncidenciasPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+    }
+    private async Task EditEstadoDialog(Incidencia inc)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true };
+
+        var parameters = new DialogParameters();
+        parameters.Add("incidencia", inc);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<EditEstadoIncidencia>("Editar estado", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+            // Si FinalizacionIncidencia está activo, establecer la FechaFinalizacion
+            if (inc.EstadoIncidencia.CierraIncidencia)
+            {
+                inc.FechaCerrada = DateTime.Now;
+                _ApplicationDbContext.Incidencias.Update(inc);
+                _ApplicationDbContext.SaveChanges();
+            }
+            await CargarIncidenciasPorProyecto(proyectoPadre);
+            StateHasChanged();
+        }
+    }
+    private async void InfoIncidenciaDialog(Incidencia inc)
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        parameters.Add("incidencia", inc);
+        //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+        var dialog = await _dialogService.Show<InfoIncidencia>("Ver Información del Incidencia", parameters, options).Result;
+    }
+    private async void NewIncidenciaDialog(Incidencia padre)
+    {
+
+        if (incidencia == null)
+        {
+            incidencia = new Incidencia();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+                incidencia.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", incidencia.Proyecto);
+                parameters.Add("incidenciapadre", padre);
+                //parameters.Add("_ApplicationDbContext", _ApplicationDbContext);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium };
+                var dialog = await _dialogService.Show<NewIncidencia>("Nuevo incidencia", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarIncidenciasPorProyecto(proyectoPadre);
+                    OnCountIncidencia.InvokeAsync(await _ApplicationDbContext.Incidencias.Where(it => it.Proyecto.Id == projectId && it.EstadoIncidencia.Nombre == "Pendiente").CountAsync());
+                    StateHasChanged();
+                }
+            }
+            else
+            {
+                Console.WriteLine("ID de incidencia no válida");
+                return;
+            }
+        }
+
+
+    }
+    private async void EliminarIncidencia(Incidencia inc)
+    {
+
+        var result = await _dialogService.ShowMessageBox("Eliminar incidencia", "¿Seguro que quieres eliminar incidencia?", "Si", "No");
+        inc = _ApplicationDbContext.Incidencias.FirstOrDefault(it => it.Id == inc.Id);
+
+        if (result is true && inc != null)
+        {
+            incidenciaPadre.Hijos.Remove(inc);
+            _ApplicationDbContext.Incidencias.Update(incidenciaPadre);
+
+            if (inc.Hijos != null && inc.Hijos.Count() != 0)
+            {
+                foreach (Incidencia hijo in inc.Hijos)
+                {
+                    _ApplicationDbContext.Incidencias.Remove(hijo);
+                }
+            }
+            _ApplicationDbContext.Incidencias.Remove(inc);
+            await _ApplicationDbContext.SaveChangesAsync();
+            await listaIncidencia.CargarIncidenciasPorProyecto(proyectoPadre);
+            if(SubListaIncidencia != null)
+            {
+                await SubListaIncidencia.CargarIncidenciasPorProyecto(proyectoPadre);
+            }
+            
+
+        }
+
+        _ApplicationDbContext.EstadosIncidencias.OrderBy(it => it.Id).ToList();
+        if (int.TryParse(id, out int projectId))
+        {
+            OnCountIncidencia.InvokeAsync(await _ApplicationDbContext.Incidencias.Where(it => it.Proyecto.Id == projectId && it.EstadoIncidencia.Nombre == "Pendiente").CountAsync());
+        }
+        await CargarIncidenciasPorProyecto(proyectoPadre);
+        StateHasChanged();
+
+    }
+}

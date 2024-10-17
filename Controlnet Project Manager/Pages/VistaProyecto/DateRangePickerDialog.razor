@@ -1,0 +1,41 @@
+﻿@using MudBlazor
+<MudDialog Style="max-width: 37%; max-height: 72%;">
+    <DialogContent>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+            <MudDateRangePicker Label="Seleccionar rango de fechas" PickerVariant="PickerVariant.Static" @bind-DateRange="dateRange" />
+        </div>
+
+
+        <div class="d-flex justify-content-center mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@Submit">Aceptar</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="@SubmitEmpty" class="ml-2">Resetear fechas</MudButton>
+        </div>
+        <br />
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public DateRange? dateRange { get; set; }
+
+    private void Submit()
+    {
+        MudDialog.Close(dateRange);
+    }
+
+    protected override void OnInitialized()
+    {
+        if (dateRange is null)
+        {
+            dateRange = new DateRange(null, null);
+        }
+        base.OnInitialized();
+    }
+
+    private void SubmitEmpty()
+    {
+        MudDialog.Close(new DateRange(null, null));
+    }
+}

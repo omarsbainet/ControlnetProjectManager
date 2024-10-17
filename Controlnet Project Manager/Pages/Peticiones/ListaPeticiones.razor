@@ -1,0 +1,813 @@
+﻿@* @page "/Incidencia"
+@page "/Incidencia/{id}" *@
+@using GemBox.Spreadsheet
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Http
+@using Microsoft.EntityFrameworkCore
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using System.Reflection;
+@using System.ComponentModel;
+@using static Controlnet_Project_Manager.Pages.Index
+
+@using Button = Controlnet_Project_Manager.Shared.Model.Button
+@using Controlnet_Project_Manager.Shared.Model
+@using MudBlazor
+@using System.Data
+
+
+@attribute [Authorize]
+@inject ApplicationDbContext _ApplicationDbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+
+@inject AuthenticationStateProvider _auth
+@inject UserManager<CPMUser> _UserManager
+@inject IDialogService _dialogService
+@inject CRUD Crud
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IJSRuntime _jSRuntime
+@inject NavigationManager _navigationManager
+@inject MyCustomTheme tema;
+@inject ISnackbar Snackbar;
+@inject NavigationManager _navigation;
+<style>
+    .mud-menu-custom {
+        width: 300px;
+    }
+
+    .btnExcel {
+        margin-left: 100px;
+    }
+
+</style>
+
+<MudToolBar DisableGutters="true" Class="d-flex" Style="@((Layout.esModoNocturno() ? $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.PaletteDark.Primary.ToString()}; padding: 0 10px; justify-content: space-between; align-items: center;" : $"border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; height: 60px; width: 100%; flex-direction: row; background-color: {tema.Theme.Palette.Primary.ToString()}; padding: 0 10px; justify-content: space-between; align-items: center;"))">
+
+            <div style="display: flex; flex-direction: row; justify-content: space-around; width: 33%;">
+                @if (menuRol!= null && menuRol.Crear)
+                {
+                        <MudButton @onclick="@(() => InvokeAsync(NewPeticionDialog))"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.Add">
+                        Nueva Peticion
+                         </MudButton>
+                    
+                }
+            </div>
+        
+        <div style="width: 33%; text-align: center;">
+            <MudText Color="Color.Secondary" Typo="Typo.h6">PETICIONES</MudText>
+        </div>
+
+        <div style="width: 33%; flex-direction: row; justify-content: space-around; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+
+                    <MudMenu AnchorOrigin="Origin.TopRight" TransformOrigin="Origin.BottomRight" Class="mud-menu-custom">
+                        <ActivatorContent>
+                <MudChip Size="Size.Large" Color="Color.Secondary" Style="@((Layout.esModoNocturno() ? $"color: {tema.Theme.PaletteDark.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;" : $"color: {tema.Theme.Palette.Primary.ToString()}; width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 5px;"))">
+                                <div style="position: absolute; left: 15px; max-width: 80%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">
+                                    @(TextSelection("Estado", _selectedEstadosPeticion))
+                                </div>
+                                <div style="position: absolute; right: 5px; bottom: 8px;">
+                                    <MudIcon Icon="@Icons.Material.Filled.KeyboardArrowDown" Class="ms-1" />
+                                </div>
+                            </MudChip>
+                        </ActivatorContent>
+                        
+                        <ChildContent>
+                            @foreach (var estado in _estadoPeticiones)
+                            {
+                                var isChecked = _selectedEstadosPeticion.Contains(estado);
+                                <MudMenuItem Style="width: 250px; height: 50px;">
+                                    <div>
+                                        <MudCheckBox T="bool" @bind-Checked=isChecked Label="@estado" @onclick="@(() => ToggleSelection(estado,_selectedEstadosPeticion))" />
+                                    </div>
+                                </MudMenuItem>
+                            }
+                        </ChildContent>
+                    </MudMenu>
+                    </div>
+
+    </MudToolBar>
+
+<br />
+<br />
+
+@if (id != null)
+{
+    <MudDataGrid @ref="@_grid" Items="@FiltrarPeticiones()" T="Peticion" RowClick="@((x)=>EditPeticionDialog(x.Item))"
+                 Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="true"
+                 Hideable="true" CurrentPage="@_selectedPage" RowsPerPage="15" Style="@((Layout.esModoNocturno() ? $"background-color:{tema.Theme.PaletteDark.Surface.ToString()}; color:white" : ""))">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">@(ProyectoSelect)</MudText>
+            <MudButton Class="btnExcel" OnClick="ExportarProyectosExcel" Color="Color.Primary" Style="@(Layout.esModoNocturno() ? "color:white" : "")" Size="Size.Medium" Variant="Variant.Filled">
+                Exportar a Excel
+            </MudButton>
+            <MudSpacer />
+            <MudSpacer />
+            <MudTextField T="string" @bind-Value="_searchString" Margin="Margin.Dense"
+                          Placeholder="Buscar" Adornment="Adornment.Start" Immediate="true"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0">
+            </MudTextField>
+        </ToolBarContent>
+        <Columns>
+            @* Representación de los datos de las peticiones *@
+            <HierarchyColumn T="Peticion" ButtonDisabledFunc="@(x => x.Hijos == null || x.Hijos.Count() == 0)" />
+
+            <PropertyColumn T="Peticion" TProperty="string" Property="x => x.Nombre" Title="Nombre" />
+            <PropertyColumn T="Peticion" TProperty="string" Property="x => GetAutor(x)" Title="Autor" />
+                
+            <TemplateColumn  SortBy="x => x.Nombre">
+                <HeaderTemplate>Estado</HeaderTemplate>
+                <CellTemplate>
+                    @{
+                        var thing = context.Item.Incidencia == null ? context.Item.Desarrollo == null ? context.Item.Aceptado == false ? "#FF0000" : "#b8daba" : context.Item.Desarrollo.EstadoDesarrollo.Color : context.Item.Incidencia.EstadoIncidencia.Color;
+                        var color = $"background-color: {thing};";
+                    }
+                    <span @onclick:stopPropagation="true">
+                        @if (context.Item.Aceptado != null)
+                        {
+                            <MudChip Color="Color.Primary" Style="@color">
+                                @(context.Item.Incidencia == null ? context.Item.Desarrollo == null ? context.Item.Aceptado == false ? "Rechazado" : "Por confirmar" : context.Item.Desarrollo.EstadoDesarrollo.Nombre : context.Item.Incidencia.EstadoIncidencia.Nombre)
+                            </MudChip>
+                        }
+                    </span>
+                        
+                </CellTemplate>
+            </TemplateColumn>
+            <TemplateColumn SortBy="x => x.Nombre">
+                <HeaderTemplate>Aceptada</HeaderTemplate>
+                <CellTemplate>
+                    @{
+                        var thing = context.Item.Aceptado == null ? "#E5BE01" : context.Item.Aceptado == true ? "#008f39" : "#FF0000";
+                        var color = $"background-color: {thing};";
+                    }
+                    <span @onclick:stopPropagation="true">
+                        <MudChip Color="Color.Primary" Style="@color">
+                            @(textoAprobado(context.Item))
+                        </MudChip>
+                    </span>
+
+                </CellTemplate>
+            </TemplateColumn>
+            <PropertyColumn T="Peticion" TProperty="string" Property="x => tipoEscogido(x)" Title="Tipo asignado"/>
+            <PropertyColumn T="Peticion" TProperty="DateTime" Property="x => x.FechaCreacion" Title="Fecha de creación" Format="dd/MM/yyyy" />
+            <PropertyColumn T="Peticion" TProperty="DateTime" Property="x => x.FechaEntrega" Title="Fecha de entrega estimada" Format="dd/MM/yyyy" />
+            <PropertyColumn T="Peticion" TProperty="DateTime?" Property="x => FechaTerminado(x)" Title="Fecha de finalizacion" Format="dd/MM/yyyy" />
+            <TemplateColumn Sortable="false">
+                <CellTemplate>
+                    @if (Layout.esModoNocturno())
+                    {
+                        @*Editar Peticion*@
+                        <MudButtonGroup VerticalAlign="false" Style="@($"background-color: {tema.Theme.PaletteDark.Primary.ToString()}; color:white")" Variant="Variant.Outlined">
+                            <MudTooltip Text="Ver Informacion">
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye" Style="@($"background-color: {tema.Theme.PaletteDark.Primary.ToString()}; color:white")" OnClick="@((e) => { InfoPeticionDialog(context.Item); })" />
+                            </MudTooltip>
+                            @if (menuRol != null && menuRol.Crear)
+                            {
+                                <MudTooltip Text="Agregar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Style="@($"background-color: {tema.Theme.PaletteDark.Primary.ToString()}; color:white")" OnClick="@((e) => {  NewPeticionDialog(context.Item); })" />
+                                </MudTooltip>
+                            }
+                            @if (menuRol != null && menuRol.Editar)
+                            {
+                                <MudTooltip Text="Editar Peticion">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Style="@($"background-color: {tema.Theme.PaletteDark.Primary.ToString()}; color:white")" OnClick="@((e) => { EditPeticionDialog(context.Item); })" />
+                                </MudTooltip>
+                            }
+                            @if (menuRol != null && menuRol.Eliminar)
+                            {
+                                <MudTooltip Text="Eliminar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Style="@($"background-color: {tema.Theme.PaletteDark.Primary.ToString()}; color:white")" OnClick="@((e) => { EliminarPeticion(context.Item); })" />
+                                </MudTooltip>
+
+                            }
+
+                            @if (context.Item.Aceptado == null && menuRol != null)
+                            {
+                                if (menuRol.Aceptar)
+                                {
+                                    <MudTooltip Text="Aprobar Peticion" Color="Color.Success">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Check" Color="Color.Success" OnClick="@((e) => { AceptarPeticion(context.Item); })" />
+                                    </MudTooltip>
+                                }
+                                if (menuRol.Rechazar)
+                                {
+                                    <MudTooltip Text="Rechazar Peticion" Color="Color.Error">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="@((e) => { DenegarPeticion(context.Item); })" />
+                                    </MudTooltip>
+                                }
+
+                            }
+
+                        </MudButtonGroup>
+                    }
+                    else
+                    {
+                        @*Editar Peticion*@
+                        <MudButtonGroup VerticalAlign="false" Color="Color.Primary" Variant="Variant.Outlined">
+                            <MudTooltip Text="Ver Informacion">
+                                <MudIconButton Icon="@Icons.Material.Filled.RemoveRedEye" Color="Color.Primary" OnClick="@((e) => { InfoPeticionDialog(context.Item); })" />
+                            </MudTooltip>
+                            @if (menuRol != null && menuRol.Crear)
+                            {
+                                <MudTooltip Text="Agregar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@((e) => {  NewPeticionDialog(context.Item); })" />
+                                </MudTooltip>
+                            }
+                            @if (menuRol != null && menuRol.Editar)
+                            {
+                                <MudTooltip Text="Editar Peticion">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@((e) => { EditPeticionDialog(context.Item); })" />
+                                </MudTooltip>
+                            }
+                            @if (menuRol != null && menuRol.Eliminar)
+                            {
+                                <MudTooltip Text="Eliminar">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@((e) => { EliminarPeticion(context.Item); })" />
+                                </MudTooltip>
+
+                            }
+
+                            @if (context.Item.Aceptado == null && menuRol != null)
+                            {
+                                if (menuRol.Aceptar)
+                                {
+                                    <MudTooltip Text="Aprobar Peticion" Color="Color.Success">
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Check" Color="Color.Success" OnClick="@((e) => { AceptarPeticion(context.Item); })" />
+                                    </MudTooltip>
+                                }
+                                if (menuRol.Rechazar)
+                                {
+                                    <MudTooltip Text="Rechazar Peticion" Color="Color.Error">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" OnClick="@((e) => { DenegarPeticion(context.Item); })" />
+                                    </MudTooltip>
+                                }
+
+                            }
+
+                        </MudButtonGroup>
+                    }
+                  
+                </CellTemplate>
+            </TemplateColumn>
+        </Columns>
+        <ChildRowContent>
+            @if (context.Item.Hijos != null && context.Item.Hijos.Count() > 0)
+            {
+                <CascadingValue Value="this">
+                    <SubPeticionLista proyectoPadre="@proyecto" peticionPadre="@context.Item" id="@proyecto.Id.ToString()"></SubPeticionLista>
+                </CascadingValue>
+                
+            }
+           
+        </ChildRowContent>
+
+        @*//Paginación *@
+        <PagerContent>
+            <MudPagination SelectedChanged="PageChanged" Count="@((_grid.GetFilteredItemsCount() + _grid.RowsPerPage - 1) / _grid.RowsPerPage)" Class="pa-4" />
+        </PagerContent>
+    </MudDataGrid>
+}
+<MudDialog @bind-IsVisible="@_uploadInProgress">
+    <DialogContent>
+        <MudText Typo="Typo.h6" Align="Align.Center">Cargando Proyectos...</MudText>
+        <br />
+        <MudProgressLinear Value="@progress" Striped="true" Size="Size.Medium" Buffer="true" BufferValue="@progressBuffer" />
+        <br />
+        <MudText Align="Align.Center">@progressText</MudText>
+        </DialogContent>
+    </MudDialog>
+
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+
+    Stack<Peticion> navegacionProyecto = new Stack<Peticion>();
+    public bool activados = true;
+    public string estados = "";
+    private bool _uploadInProgress;
+    private double progress = 0;
+    private double progressBuffer = 0;
+    private string progressText = "";
+    private string _searchString = "";
+    private MudDataGrid<Peticion> _grid;
+    private int _selectedPage;
+    private int numPeticion { get; set; } //CONTADOR PARA LAS Peticiones
+    private List<Peticion> Listapeticiones = new List<Peticion>();
+    public Peticion peticion { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; }
+    [Parameter] public string id { get; set; }
+    [Parameter] public EventCallback<int> OnCountPeticion { get; set; }
+    private MenuRol menuRol = null;
+
+    private String[] _estadoPeticiones = new String[] { "Aceptada", "Rechazada", "Pendiente" };
+
+    private bool ischecked = false;
+    string txtSinProg = "Sin asignar";
+    private List<String> _selectedEstadosPeticion = new List<String>();
+
+    public CPMUser usuario { get; set; }
+
+    public string GetAutor(Peticion d)
+    {
+        return d?.Autor?.Nombre ?? "";
+    }
+
+    [Parameter]
+    public string ProyectoSelect { get; set; }
+
+    private List<ProgramadoresProyecto> _programadores = new List<ProgramadoresProyecto>();
+    private DateRange _dateRange { get; set; }
+    private MudDateRangePicker _picker;
+    private bool _autoClose;
+    private Peticion SelectedItem;
+    private void PageChanged(int i)
+    {
+        _selectedPage = i - 1;
+        StateHasChanged();
+    }
+
+
+    void limpiarNavegacion()
+    {
+        navegacionProyecto.Clear();
+        navegacionProyecto.Push(peticion);
+        StateHasChanged();
+    }
+
+    void volverAtras()
+    {
+        navegacionProyecto.Pop();
+        StateHasChanged();
+    }
+
+    private async Task VerProyecto(Peticion pro)
+    {
+        navegacionProyecto.Push(_ApplicationDbContext.Peticiones.FirstOrDefault(u => u.Id == pro.Id));
+        await CargarPeticionesPorProyecto(proyecto);
+        StateHasChanged();
+    }
+
+    private bool Cargando = true;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            if (int.TryParse(id, out int projectId))
+            {
+                usuario = Layout.usuario;
+
+                menuRol = await Crud.GetMenuRol((int)MenuEnum.Peticiones, usuario);
+                Cargando = false;
+                navegacionProyecto.Push(peticion);
+                proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+                await CargarPeticionesPorProyecto(proyecto);
+                await cargarProgramadores();
+                await using var ctx = await DbFactory.CreateDbContextAsync();
+
+                _selectedPage = 0;
+            }
+            else
+            {
+                await CargarPeticionesDesdeBD();
+            }
+            StateHasChanged();
+        } catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    public async Task CargarPeticionesPorProyecto(Proyecto pro)
+    {
+        try
+        {
+
+            Listapeticiones = await _ApplicationDbContext.Peticiones
+            .Include(it => it.Proyecto)
+            .Include(it => it.Desarrollo)
+            .Include(it => it.Incidencia)
+            .Include(it => it.Autor)
+            .Where(p => p.Proyecto.Id == pro.Id)
+            .OrderByDescending(p => p.FechaCreacion)
+            .ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarPeticionesPorProyecto(pro);
+        }
+    }
+    private async Task CargarPeticionesDesdeBD()
+    {
+        try
+        {
+            Listapeticiones = await _ApplicationDbContext.Peticiones.Include(it => it.Desarrollo).Include(it => it.Incidencia).Include(it => it.Proyecto).Include(it => it.Autor).ToListAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await CargarPeticionesDesdeBD();
+        }
+    }
+
+    private List<Peticion> FiltrarPeticiones()
+    {
+
+        var filteredList = Listapeticiones;
+
+        if (!string.IsNullOrWhiteSpace(_searchString))
+        {
+            filteredList = filteredList.Where(it =>
+                (it.Nombre != null && it.Nombre.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+                it.FechaCreacion.ToString().Contains(_searchString, StringComparison.OrdinalIgnoreCase) ||
+                it.FechaFinalizacion.ToString().Contains(_searchString, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        if (_selectedEstadosPeticion.Count > 0)
+        {
+            filteredList = filteredList.Where(c => _selectedEstadosPeticion.Contains(textoAprobado(c))).ToList();
+        }
+
+        if (_dateRange != null)
+        {
+            filteredList = filteredList.Where(it =>
+                (it.FechaFinalizacion >= _dateRange.Start && it.FechaFinalizacion <= _dateRange.End) ||
+                (it.FechaCreacion >= _dateRange.Start && it.FechaCreacion <= _dateRange.End)).ToList();
+        }
+
+        return filteredList;
+
+           
+    }
+
+
+    private async Task NewPeticionDialog()
+    {
+
+        if (peticion == null)
+        {
+            peticion = new Peticion();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+
+                peticion.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", peticion.Proyecto);
+                parameters.Add("autor", usuario);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
+                var dialog = await _dialogService.Show<NewPeticion>("Nueva peticion", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarPeticionesPorProyecto(proyecto);
+                    await OnCountPeticion.InvokeAsync(await _ApplicationDbContext.Peticiones.Where(it => it.Proyecto.Id == projectId).CountAsync());
+                    StateHasChanged();
+                }
+                else
+                {
+                    var confirmResult = await _dialogService.ShowMessageBox(
+                       "Confirmación",
+                       "¿Estás seguro de que quieres cancelar?",
+                       "Sí",
+                       "No",
+                       "",
+                       new DialogOptions { FullWidth = true, MaxWidth = MaxWidth.Small }
+                   );
+
+                    if (confirmResult == true)
+                    {
+                        
+                        Console.WriteLine("Cancelación confirmada");
+                    }
+                    else
+                    {
+                        
+                        Console.WriteLine("Cancelación no confirmado");
+                        await NewPeticionDialog();
+                    }
+                }
+            }
+            else
+            {
+
+                Console.WriteLine("ID de peticion no válida");
+                return;
+            }
+        }
+
+
+    }
+    private async void NewPeticionDialog(Peticion padre)
+    {
+
+        if (peticion == null)
+        {
+            peticion = new Peticion();
+        }
+
+        if (!string.IsNullOrEmpty(id))
+        {
+            if (int.TryParse(id, out int projectId))
+            {
+
+                peticion.Proyecto = await _ApplicationDbContext.Proyectos.FindAsync(projectId);
+
+                var parameters = new DialogParameters();
+                parameters.Add("Proyecto", peticion.Proyecto);
+                parameters.Add("autor", usuario);
+                parameters.Add("peticionpadre", padre);
+                var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Medium, DisableBackdropClick = true };
+                var dialog = await _dialogService.Show<NewPeticion>("Nueva peticion", parameters, options).Result;
+
+                if (dialog.Data != null)
+                {
+                    await CargarPeticionesPorProyecto(proyecto);
+                    await OnCountPeticion.InvokeAsync(await _ApplicationDbContext.Peticiones.Where(it => it.Proyecto.Id == projectId).CountAsync());
+                    StateHasChanged();
+                }
+
+            }
+
+
+            else
+            {
+
+                Console.WriteLine("ID de peticion no válida");
+                return;
+            }
+        }
+
+
+    }
+
+    private async void InfoPeticionDialog(Peticion inc)
+    {
+        var parameters = new DialogParameters();
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, MaxWidth = MaxWidth.Small };
+        parameters.Add("peticion", inc);
+        var dialog = await _dialogService.Show<InfoPeticion>("Ver Informacion de la Peticion", parameters, options).Result;
+    }
+
+    private async void EliminarPeticion(Peticion inc)
+    {
+        var result = await _dialogService.ShowMessageBox("Eliminar peticion", "¿Seguro que quieres eliminar peticion?", "Si", "No");
+        inc = _ApplicationDbContext.Peticiones.FirstOrDefault(it => it.Id == inc.Id);
+
+        if (result is true && inc != null)
+        {
+            if (inc.Hijos != null && inc.Hijos.Count() != 0)
+            {
+                foreach (Peticion hijo in inc.Hijos)
+                {
+                    _ApplicationDbContext.Peticiones.Remove(hijo);
+                }
+            }
+            _ApplicationDbContext.Peticiones.Remove(inc);
+            await _ApplicationDbContext.SaveChangesAsync();
+            Snackbar.Add("Se ha eliminado la petición correctamente", Severity.Success);
+         //_navigation.NavigateTo(_navigation.GetUriWithQueryParameter("/Proyectos/", peticion.Id));
+
+        }
+
+        if (int.TryParse(id, out int projectId))
+        {
+            await OnCountPeticion.InvokeAsync(await _ApplicationDbContext.Peticiones.Where(it => it.Proyecto.Id == projectId).CountAsync());
+        }
+        await CargarPeticionesPorProyecto(proyecto);
+        StateHasChanged();
+
+    }
+
+    private async Task EditPeticionDialog(Peticion pro)
+    {
+        @if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+            var parameters = new DialogParameters();
+            parameters.Add("peticion", pro);
+            parameters.Add("proyecto", proyecto);
+            var dialog = await _dialogService.Show<NewPeticion>("Editar peticion", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                // Si FinalizacionDesarrollo está activo, establecer la FechaFinalizacion
+                //if (pro.EstadoPeticion.Nombre == "Terminada")
+                //{
+                //    pro.FechaFinalizacion = DateTime.Today;
+                //    _ApplicationDbContext.Peticiones.Update(pro);
+                //    _ApplicationDbContext.SaveChanges();
+                //}
+
+                await CargarPeticionesPorProyecto(proyecto);
+                StateHasChanged();
+            }
+        }
+        //SelectedItem = null;
+    }
+
+    private async Task DenegarPeticion(Peticion pro)
+    {
+        @if (menuRol.Editar)
+        {
+            var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+            var parameters = new DialogParameters();
+            parameters.Add("peticion", pro);
+            var dialog = await _dialogService.Show<RechazoPeticion>("Razón de negación", parameters, options).Result;
+            if (dialog.Data != null)
+            {
+                // Si FinalizacionDesarrollo está activo, establecer la FechaFinalizacion
+                if (pro.Aceptado == false)
+                {
+                    pro.FechaFinalizacion = DateTime.Today;
+                    _ApplicationDbContext.Peticiones.Update(pro);
+                    _ApplicationDbContext.SaveChanges();
+                }
+
+                await CargarPeticionesPorProyecto(proyecto);
+                StateHasChanged();
+            }
+        }
+        //SelectedItem = null;
+    }
+
+    private async Task AceptarPeticion(Peticion pro)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, FullWidth = true, DisableBackdropClick = true, MaxWidth = MaxWidth.Medium };
+
+        var parameters = new DialogParameters();
+        parameters.Add("peticion", pro);
+        parameters.Add("usuario", usuario);
+        var dialog = await _dialogService.Show<AceptarPeticion>("Selección de tipo de tarea", parameters, options).Result;
+        if (dialog.Data != null)
+        {
+
+            await CargarPeticionesPorProyecto(proyecto);
+            StateHasChanged();
+        }
+
+        //SelectedItem = null;
+    }
+
+
+    private async Task cargarProgramadores()
+    {
+        if (int.TryParse(id, out int projectId))
+        {            await using var ctx = await DbFactory.CreateDbContextAsync();
+
+            _programadores = await ctx.ProgramadoresProyectos.Include(it => it.Programador).Include(it => it.Proyecto).Where(programador => programador.Proyecto.Id == projectId).ToListAsync();
+        }
+    }
+
+    private void ToggleSelection(string item, List<String> lista)
+    {
+        if (lista.Contains(item))
+        {
+            lista.Remove(item);
+        }
+        else
+        {
+            lista.Add(item);
+        }
+    }
+
+    private string TextSelection(string item, List<String> lista)
+    {
+        var texto = "";
+
+        if (lista.Count == 0)
+        {
+            texto = item;
+        }
+        else if (lista.Count == 1)
+        {
+            texto = lista.FirstOrDefault();
+        }
+        else 
+        {
+            texto = "2 " + item + " o más seleccionados";
+            texto = texto.Substring(0, Math.Min(texto.Length, 25)) + "...";
+        }
+
+        return texto;
+    }
+
+
+    private async void StartedEditingItem(DataGridRowClickEventArgs<Peticion> args)
+    {
+        await EditPeticionDialog(args.Item);
+    }
+
+    private string tipoEscogido(Peticion x)
+    {
+        return x.Aceptado == true ? x.Incidencia != null ? "Incidencia" : x.Desarrollo != null ? "Desarrollo" : "" : "";
+    }
+
+    private string textoAprobado(Peticion x)
+    {
+        return x.Aceptado == null ? "Pendiente" : x.Aceptado == true ? "Aceptada" : "Rechazada";
+    }
+
+   
+    private DateTime? FechaTerminado(Peticion x)
+    {
+        return x.Incidencia == null? x.Desarrollo == null? null : x.Desarrollo.FechaFinalizacion : x.Incidencia.FechaCerrada;
+    }
+
+
+    private class clsExportListaPeticiones
+    {
+        public string nombre { get; set; }
+        public string autor { get; set; }
+        public string aceptado { get; set; }
+        public DateTime fechaCreacion { get; set; }
+        public DateTime fechaEntregaEstimada { get; set; }
+        public DateTime? fechaCerrada { get; set; }
+    }
+
+
+    public async void ExportarProyectosExcel()
+    {
+
+        var listIds = new List<int>();
+
+        if (_selectedEstadosPeticion.Any())
+        {
+            listIds = Listapeticiones
+                .Where(p => (!_selectedEstadosPeticion.Any() || _selectedEstadosPeticion.Contains(p.Aceptado.HasValue ? (p.Aceptado.Value ? "Aceptada" : "Rechazada") : "Pendiente")))
+                .Select(p => p.Id)
+                .ToList();
+
+            if (!listIds.Any())
+            {
+                return;
+            }
+        }
+        else
+        {
+            listIds = Listapeticiones.Select(p => p.Id).ToList();
+        }
+
+
+        var listaPeticiones = _ApplicationDbContext.Peticiones
+                             .Where(p => listIds.Contains(p.Id))
+                             .Select(p => new clsExportListaPeticiones
+                                 {
+                                     nombre = p.Nombre,
+                                     autor = p.Autor.Nombre,
+                                     aceptado = p.Aceptado.HasValue ? (p.Aceptado.Value ? "Aceptada" : "Rechazada") : "Pendiente",
+                                     fechaCreacion = p.FechaCreacion,
+                                     fechaEntregaEstimada = p.FechaEntrega,
+                                     fechaCerrada = p.FechaFinalizacion
+                                 })
+                             .ToList();
+
+        SpreadsheetInfo.SetLicense("E7OT-N392-PMUC-Q7ZS");
+
+        ExcelFile workbook = new ExcelFile();
+        ExcelWorksheet worksheet = workbook.Worksheets.Add("Proyectos");
+        ListtoDataTableConverter converter = new ListtoDataTableConverter();
+
+        List<clsExportListaPeticiones> listaExportar = new List<clsExportListaPeticiones>();
+
+        foreach (var peticion in listaPeticiones)
+        {
+            clsExportListaPeticiones exportIncidencia = new clsExportListaPeticiones
+                {
+                    nombre = peticion.nombre,
+                    autor = peticion.autor,
+                    aceptado = peticion.aceptado,
+                    fechaCreacion = peticion.fechaCreacion,
+                    fechaEntregaEstimada = peticion.fechaEntregaEstimada,
+                    fechaCerrada = peticion.fechaCerrada
+                };
+
+            listaExportar.Add(exportIncidencia);
+        }
+
+        DataTable dt = converter.ToDataTable(listaPeticiones);
+
+        InsertDataTableOptions options = new InsertDataTableOptions() { ColumnHeaders = true };
+        worksheet.InsertDataTable(dt, options);
+        using (MemoryStream memoryStream = new MemoryStream())
+        {
+            workbook.Save(memoryStream, GemBox.Spreadsheet.XlsxSaveOptions.XlsDefault);
+            memoryStream.Position = 0;
+
+            await _jSRuntime.InvokeVoidAsync("downloadFile", "proyecto.xlsx", Convert.ToBase64String(memoryStream.ToArray()));
+        }
+
+    }
+}

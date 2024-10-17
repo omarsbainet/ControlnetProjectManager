@@ -1,0 +1,220 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using Color = MudBlazor.Color
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<CPMUser> _UserManager
+@inject AuthenticationStateProvider _auth
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent >
+        <MudContainer Style="max-height: 450px; overflow-y: scroll">
+            <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+                <MudTextField ValueChanged="@(e=> { _filterString= e;})" T="string" Label="Buscar programadores" Immediate="true" Value="_filterString" FullWidth="true" Class="mb-4" On="OpenSelect" />
+                    <MudList @ref=mudList>
+                    @foreach (var programador in getLista())
+                    {
+                        <MudListItem>
+                            <MudCheckBox TriState="false" Checked="@isChecked(programador)" CheckedChanged="((e) => {CheckedChange(programador);})" T="bool" Label="@programador.Nombre"></MudCheckBox>
+                        </MudListItem>
+                    }
+                    </MudList>
+
+                @*  <MudSelect @ref="@mudSelectRef" Margin="Margin.Dense" T="String" Placeholder="Programador"
+                SelectedValues="_selectedProgramadores"
+                SelectedValuesChanged="@((e)=> {_selectedProgramadores = e.ToList(); StateHasChanged();})"
+                MultiSelection="true" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var programador in lstProgramadores.Where(x => Filter(x.Nombre)).Select(it => it.Nombre))
+                {
+                <MudSelectItem Value="@programador">@programador.ToString()</MudSelectItem>
+                }
+                </MudSelect> *@
+            </MudForm>
+        </MudContainer>
+        
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    //Variables y Parametros
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    public CPMUser Programadores { get; set; }
+    [Parameter] public ProgramadoresProyecto programadoresProyecto { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; } = new Proyecto();
+    [Inject] private IDialogService DialogService { get; set; }
+
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<CPMUser> lstProgramadores = new List<CPMUser>();
+    List<CPMUser> _selectedProgramadores = new List<CPMUser>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (programadoresProyecto == null)
+                {
+                    programadoresProyecto = new ProgramadoresProyecto();
+                }
+                if (programadoresProyecto.Id != 0 && programadoresProyecto.Id != null)
+                {
+                    programadoresProyecto = _ApplicationDbContext.ProgramadoresProyectos.FirstOrDefault(u => u.Id == programadoresProyecto.Id);
+                }
+
+                await cargarProgramadores();
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(programadoresProyecto).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (programadoresProyecto.Id != 0 && programadoresProyecto.Id != null)
+                {
+                    proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == programadoresProyecto.Proyecto.Id);
+
+                    if (proyecto != null)
+                    {
+                        programadoresProyecto.Proyecto = proyecto;
+
+                        _ApplicationDbContext.ProgramadoresProyectos.Update(programadoresProyecto);
+
+                        await _ApplicationDbContext.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                        return;
+                    }
+                }
+                else
+                {
+                    foreach (var programador in _selectedProgramadores)
+                    {
+                        if (programador != null)
+                        {
+                            programadoresProyecto = new ProgramadoresProyecto();
+                            proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == proyecto.Id);
+                            Programadores = _ApplicationDbContext.Users.FirstOrDefault(it => it.Id == programador.Id);
+
+                            if (proyecto != null)
+                            {
+                                programadoresProyecto.Programador = Programadores;
+                                programadoresProyecto.Proyecto = proyecto;
+                            }
+                            else
+                            {
+                                await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                                return;
+                            }
+
+
+                            _ApplicationDbContext.ProgramadoresProyectos.Add(programadoresProyecto);
+                        }
+                        else
+                        {
+                            return;
+                        }
+                    }
+
+                    _ApplicationDbContext.SaveChanges();
+                }
+
+
+
+                MudDialog.Close(DialogResult.Ok<ProgramadoresProyecto>(programadoresProyecto));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+    private async Task<IEnumerable<CPMUser>> Search(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstProgramadores;
+
+        return lstProgramadores.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private async Task cargarProgramadores()
+    {
+        lstProgramadores = _ApplicationDbContext.Users.Where(e => !_ApplicationDbContext.ProgramadoresProyectos.Any(ep => ep.Programador.Id == e.Id && ep.Proyecto.Id == proyecto.Id)).ToList();
+    }
+
+    private string _filterString = "";
+
+    private bool Filter(string programador)
+    {
+        return programador.ToLower().Contains(_filterString.ToLower());
+    }
+    MudList mudList;
+
+
+    private List<CPMUser> getLista()
+    {
+       return lstProgramadores.Where(it => it.Nombre.ToUpper().Contains(_filterString.ToUpper())).ToList();
+    }
+
+    private void CheckedChange(CPMUser programador)
+    {
+        if (_selectedProgramadores.Contains(programador))
+        {
+            _selectedProgramadores.Remove(programador);
+        }
+        else
+        {
+            _selectedProgramadores.Add(programador);
+        }
+    }
+    private bool isChecked(CPMUser programador)
+    {
+        if(_selectedProgramadores.Contains(programador))
+        {
+            return true;
+        }
+        return false;
+    }
+
+}

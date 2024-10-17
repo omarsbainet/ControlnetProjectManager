@@ -1,0 +1,101 @@
+﻿@using Controlnet_Project_Manager.Areas.Identity.Data
+@using static Controlnet_Project_Manager.Pages.BalanceHoras.MostrarBalanceHoras
+<MudDataGrid Items="@infoMostrar" T="SubInfoProyecto" Hover="true" ShowColumnOptions="false" ShowMenuIcon="false" Dense="false" Hideable="true" RowsPerPage="12" >
+    <Columns>
+        <PropertyColumn T="SubInfoProyecto" TProperty="string" Property="x => x.Nombre" Title="Nombre proyecto" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana1" Title="Semana 1" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana2" Title="Semana 2" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana3" Title="Semana 3" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana4" Title="Semana 4" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana1Real" Title="Semana 1 real" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana2Real" Title="Semana 2 real" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana3Real" Title="Semana 3 real" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.Semana4Real" Title="Semana 4 real" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="string" Property="x => x.FechaContrato" Title="Fecha contrato" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="string" Property="x => x.FechaEntrega" Title="Fecha entrega" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.HorasPrevistas" Title="Horas estimadas" />
+        <PropertyColumn T="SubInfoProyecto" TProperty="int" Property="x => x.HorasSemanales" Title="Horas semanales estimadas" />
+    </Columns>
+</MudDataGrid>
+
+@code {
+    [CascadingParameter]
+    public MainLayout Layout { get; set; }
+    [Parameter] public InfoProyectos infoProyectos { get; set; }
+    private List<SubInfoProyecto> infoMostrar = new List<SubInfoProyecto>();
+    private int horasSemanales = 0;
+    public class SubInfoProyecto
+    {
+        public string Nombre { get; set; }
+        public int Semana1 { get; set; }
+        public int Semana2 { get; set; }
+        public int Semana3 { get; set; }
+        public int Semana4 { get; set; }
+        public int Semana1Real { get; set; }
+        public int Semana2Real { get; set; }
+        public int Semana3Real { get; set; }
+        public int Semana4Real { get; set; }
+        public string FechaContrato { get; set; }
+        public string FechaEntrega { get; set; }
+        public int HorasPrevistas { get; set; }
+        public int HorasSemanales { get; set; }
+
+        public SubInfoProyecto(string nombre, int semana1, int semana2, int semana3, int semana4,int semana1real,int semana2real,int semana3real,int semana4real, string fechaContrato, string fechaEntrega, int horasPrevistas, int horasSemanales)
+        {
+            this.Nombre = nombre;
+            this.Semana1 = semana1;
+            this.Semana2 = semana2;
+            this.Semana3 = semana3;
+            this.Semana4 = semana4;
+            this.Semana1Real = semana1real;
+            this.Semana2Real = semana2real;
+            this.Semana3Real = semana3real;
+            this.Semana4Real = semana4real;
+            this.FechaContrato = fechaContrato;
+            this.FechaEntrega = fechaEntrega;
+            this.HorasPrevistas = horasPrevistas;
+            this.HorasSemanales = horasSemanales;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            GenerarInfoProyectos();
+        }
+        catch (Exception ex)
+        {
+            await Task.Delay(100);
+            await OnInitializedAsync();
+        }
+    }
+
+    private void GenerarInfoProyectos()
+    {
+        for (int i = 0; i < infoProyectos.SubProyectos.Count(); i++)
+        {
+            var proyecto = infoProyectos.SubProyectos[i];
+            var infoSubProyecto = infoProyectos.SubProyectosInfo[i];
+            var infoProyectoActual = new SubInfoProyecto(proyecto.Nombre, infoSubProyecto.Semana1, infoSubProyecto.Semana2, infoSubProyecto.Semana3, infoSubProyecto.Semana4, infoSubProyecto.Semana1real, infoSubProyecto.Semana2real, infoSubProyecto.Semana3real,infoSubProyecto.Semana4real, proyecto.FechaPrevistaContrato.ToString("dd/MM/yy"), proyecto.FechaPrevistaEntrega.ToString("dd/MM/yy"), proyecto.HorasEstimadas, CalcularHorasSemanalesEstimadas(proyecto));
+            infoMostrar.Add(infoProyectoActual);
+        }
+    }
+
+    private int CalcularHorasSemanalesEstimadas(Proyecto proyecto)
+    {
+        var diferencia = proyecto.FechaPrevistaEntrega - proyecto.FechaPrevistaContrato;
+        var semanasDiferencia = diferencia.Duration().Days / 7;
+        if (semanasDiferencia == 0)
+        {
+            horasSemanales = proyecto.HorasEstimadas;
+            return horasSemanales;
+        }
+        else
+        {
+            horasSemanales = proyecto.HorasEstimadas / semanasDiferencia;
+            horasSemanales = horasSemanales + (int)(horasSemanales * 0.15);
+            return horasSemanales;
+        }
+    }
+}

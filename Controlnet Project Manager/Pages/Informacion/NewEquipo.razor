@@ -1,0 +1,200 @@
+﻿@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+@using Color = MudBlazor.Color
+@using Controlnet_Project_Manager.Areas.Identity.Data
+@using Controlnet_Project_Manager.Data
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<CPMUser> _UserManager
+@inject AuthenticationStateProvider _auth
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IDialogService _dialogService;
+@inject ApplicationDbContext _ApplicationDbContext
+
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success" @bind-Errors="@errors">
+            <MudSelect Margin="Margin.Dense" T="String" Placeholder="Equipo" SelectedValues="_selectedEquipos" SelectedValuesChanged="@((e)=> {_selectedEquipos = e.ToList(); StateHasChanged();})" MultiSelection="true" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var equipos in lstEquipos.Select(it => it.Nombre))
+                {
+                    <MudSelectItem Value="@equipos">@equipos.ToString()</MudSelectItem>
+                }
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Submit" Color="Color.Primary">Aceptar</MudButton>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+
+@code {
+    //Variables y Parametros
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+    public Equipo Equipo { get; set; }
+    public ProgramadoresProyecto programadoresProyecto { get; set; }
+    public ProgramadoresEquipos programadoresEquipo { get; set; }
+    [Parameter] public EquiposProyecto equiposProyecto { get; set; }
+    [Parameter] public Proyecto proyecto { get; set; } = new Proyecto();
+    [Inject] private IDialogService DialogService { get; set; }
+
+    private bool resetValueOnEmptyText;
+    private bool coerceText;
+    private bool coerceValue;
+
+    MudForm form;
+    bool success;
+    string[] errors = { };
+    List<Equipo> lstEquipos = new List<Equipo>();
+    List<ProgramadoresEquipos> lstProgramadoresEquipos = new List<ProgramadoresEquipos>();
+    List<CPMUser> lstProgramadores = new List<CPMUser>();
+    List<ProgramadoresProyecto> lstProgramadoresProyecto = new List<ProgramadoresProyecto>();
+
+    List<String> _selectedEquipos = new List<String>();
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        bool wait = true;
+        while (wait)
+        {
+            try
+            {
+                if (equiposProyecto == null)
+                {
+                    equiposProyecto = new EquiposProyecto();
+                }
+                if (equiposProyecto.Id != 0 && equiposProyecto.Id != null)
+                {
+                    equiposProyecto = _ApplicationDbContext.EquiposProyectos.FirstOrDefault(u => u.Id == equiposProyecto.Id);
+                }
+
+                await cargarEquipos();
+                await cargarProgramadores();
+                await cargarProgramadoresProyecto();
+                wait = false;
+            }
+            catch (InvalidOperationException e)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
+    void Cancel()
+    {
+        MudDialog.Cancel();
+        _ApplicationDbContext.Entry(equiposProyecto).Reload();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+
+        if (form.IsValid)
+        {
+            try
+            {
+                if (equiposProyecto.Id != 0 && equiposProyecto.Id != null)
+                {
+                    proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == equiposProyecto.Proyecto.Id);
+
+                    if (proyecto != null)
+                    {
+                        equiposProyecto.Proyecto = proyecto;
+
+                        _ApplicationDbContext.EquiposProyectos.Update(equiposProyecto);
+
+                        await _ApplicationDbContext.SaveChangesAsync();
+                    }
+                    else
+                    {
+                        await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                        return;
+                    }
+                }
+                else
+                {
+                    foreach (var equipo in _selectedEquipos)
+                    {
+                        if (equipo != null)
+                        {
+                            equiposProyecto = new EquiposProyecto();
+                            proyecto = _ApplicationDbContext.Proyectos.Include(p => p.Estado).SingleOrDefault(it => it.Id == proyecto.Id);
+                            Equipo = _ApplicationDbContext.Equipos.FirstOrDefault(it => it.Nombre == equipo);
+
+                            if (proyecto != null)
+                            {
+                                equiposProyecto.Equipo = Equipo;
+                                equiposProyecto.Proyecto = proyecto;
+                                lstProgramadoresEquipos = _ApplicationDbContext.ProgramadoresEquipos.Where(e => e.Equipo.Id == Equipo.Id).ToList();
+                            }
+                            else
+                            {
+                                await DialogService.ShowMessageBox("Error", $"No se encontró el proyecto con Id {proyecto.Id}");
+                                return;
+                            }
+
+                            _ApplicationDbContext.EquiposProyectos.Add(equiposProyecto);
+                        }
+                        else
+                        {
+                            return;
+                        }
+
+                    }
+
+                    foreach (var prog in lstProgramadoresEquipos)
+                    {
+                        programadoresProyecto = new ProgramadoresProyecto();
+                        var programador = lstProgramadores.FirstOrDefault(it => it.Id == prog.Programador.Id);
+
+                        programadoresProyecto.Programador = programador;
+                        programadoresProyecto.Proyecto = proyecto;
+                        if (!lstProgramadoresProyecto.Any(it => it.Programador == programador && it.Proyecto == proyecto))
+                        {
+                            _ApplicationDbContext.ProgramadoresProyectos.Add(programadoresProyecto);
+                        }
+                    }
+                    _ApplicationDbContext.SaveChanges();
+
+                }
+
+
+
+                MudDialog.Close(DialogResult.Ok<EquiposProyecto>(equiposProyecto));
+            }
+            catch (Exception ex)
+            {
+                await DialogService.ShowMessageBox("Error", ex.Message);
+            }
+        }
+    }
+    private async Task<IEnumerable<Equipo>> Search(string value)
+    {
+        await Task.Delay(5);
+
+        if (string.IsNullOrEmpty(value))
+            return lstEquipos;
+
+        return lstEquipos.Where(e => e.Nombre.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+    private async Task cargarEquipos()
+    {
+        lstEquipos = _ApplicationDbContext.Equipos.Where(e => !_ApplicationDbContext.EquiposProyectos.Any(ep => ep.Equipo.Id == e.Id && ep.Proyecto.Id == proyecto.Id)).ToList();
+    }
+
+    private async Task cargarProgramadores()
+    {
+        lstProgramadores = _ApplicationDbContext.Users.ToList();
+    }
+
+    private async Task cargarProgramadoresProyecto()
+    {
+        lstProgramadoresProyecto = _ApplicationDbContext.ProgramadoresProyectos.ToList();
+    }
+
+}

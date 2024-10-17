@@ -1,0 +1,67 @@
+@using Microsoft.AspNetCore.Identity;
+@using Microsoft.AspNetCore.Http;
+@using System.Text.RegularExpressions
+@using System.ComponentModel.DataAnnotations
+
+
+@inject IHttpContextAccessor _httpContextAccessor
+@inject IDialogService _dialogService;
+
+<MudDialog>
+    <DialogContent>
+
+        <div style="text-align: center">
+            @if (!activado)
+            {
+                <MudText>¿Seguro que quieres activar este usuario?</MudText>    
+            }
+            else
+            {
+                <MudText>¿Seguro que quieres desactivar este usuario?</MudText>    
+            }
+            
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+                    @if (!activado)
+                    {
+                        <MudButton Color="Color.Primary" OnClick="Submit">Activar</MudButton> 
+                    }
+                    else
+                    {
+                        <MudButton Color="Color.Primary" OnClick="Submit">Desactivar</MudButton>   
+                    }
+        
+    </DialogActions>
+</MudDialog>
+
+@code {
+
+    [CascadingParameter]
+    MudDialogInstance MudDialog { get; set; }
+
+    [Parameter]
+    public bool activado { get; set; }
+
+    [Inject]
+    private IDialogService DialogService { get; set; }
+
+    IEnumerable<System.Security.Claims.Claim> userClaims;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+    }
+
+    private async void Submit()
+    {
+        
+        MudDialog.Close(DialogResult.Ok<bool>(true));
+    }
+
+
+    void Cancel() => MudDialog.Cancel();
+
+}

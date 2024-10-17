@@ -1,0 +1,94 @@
+﻿@page "/Email"
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@model Controlnet_Project_Manager.Pages.Login_Restablecimiento.RecibirEnlaceModel
+@using Controlnet_Project_Manager.Areas.Identity.Data
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>Restablecer contraseña</title>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<!--===============================================================================================-->
+	<link rel="icon" type="image/png" href="~/images/icons/favicon.ico" />
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/bootstrap/css/bootstrap.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/fonts/font-awesome-4.7.0/css/font-awesome.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/fonts/Linearicons-Free-v1.0.0/icon-font.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/animate/animate.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/css-hamburgers/hamburgers.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/animsition/css/animsition.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/select2/select2.min.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/vendor/daterangepicker/daterangepicker.css">
+	<!--===============================================================================================-->
+	<link rel="stylesheet" type="text/css" href="~/css/util.css">
+	<link rel="stylesheet" type="text/css" href="~/css/main.css">
+	<!--===============================================================================================-->
+
+
+	<style>
+		.input-with-icon {
+			position: relative;
+		}
+
+			.input-with-icon input {
+				padding-right: 30px;
+			}
+
+			.input-with-icon .toggle-password {
+				position: absolute;
+				right: 10px;
+				top: 50%;
+				transform: translateY(-50%);
+				cursor: pointer;
+			}
+
+	</style>
+</head>
+<body>
+	<div class="limiter">
+		<div class="container-login100">
+			<div class="wrap-login100">
+				<div class="login100-form-title" style="">
+					<img src="images/bg-01.svg" alt="Controlnet" />
+				</div>
+				<!--Este formulario contiene un input en el que el usuario deberá especificar el correo electronico-->
+				<form method="post" asp-page="/Email" class="login100-form validate-form">
+					@Html.AntiForgeryToken()
+					<div class="wrap-input100 validate-input m-b-26" data-validate="El email debe de tener formato ejemplo@ejemplo.es">
+						<span class="label-input100">Email</span>
+						<input asp-for="input.email" class="input100" type="text" name="email" autocomplete="email" placeholder="Introduzca el correo electrónico">
+						<label asp-for="input.email" class="form-label"></label>
+						<span asp-validation-for="input.email" class="text-danger"></span>
+						<span class="focus-input100"></span>
+					</div>
+					<div style="display:flex;height:50px;">
+						<!--Si no queremos restablecer la contraseña o simplemente le dimos por error, podemos volver atras-->
+						<div style="background-color:darkgreen;border:medium;border-radius:25px;width:200px;margin-right:20px;padding:13px">
+							<a href="/login" style="color:white">Volver a Login</a>
+						</div>
+						<div class="container-login100-form-btn">
+							<!--Al hacer click en el boton, al estar relacionado con el model del archivo "RecibirEnlace.cshtml.cs", se ejecutará la funcion
+								relacionada.
+							-->
+							<button class="login100-form-btn">
+							Enviar enlace
+							</button>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+	</div>				
+</body>
+</html>
+
